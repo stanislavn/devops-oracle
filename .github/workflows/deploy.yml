@@ -22,7 +22,7 @@ jobs:
     - name: Deploy on VPS
       run: |
         ssh -o StrictHostKeyChecking=no ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} << EOF
-        cd /home/ubuntu/django-app
+        cd /home/ubuntu/django-app/devops-oracle
         git pull origin main
         docker-compose down
         docker-compose up --build -d
