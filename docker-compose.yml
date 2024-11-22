@@ -9,10 +9,16 @@ services:
       - .env.prod
     volumes:
       - ./media:/app/media
+      - ./logs:/app/logs
     depends_on:
       - db
     restart: always
-
+    command: >
+      sh -c "
+      ./wait-for-it.sh db:5432 -- python manage.py migrate &&
+      gunicorn project.wsgi:application --bind 0.0.0.0:80
+      "
+      
   db:
     image: postgres:15
     env_file:
@@ -20,6 +26,10 @@ services:
     volumes:
       - postgres-data:/var/lib/postgresql/data
     restart: always
+    logging:
+      options:
+        max-size: "10m"
+        max-file: "3"
 
 volumes:
   postgres-data:

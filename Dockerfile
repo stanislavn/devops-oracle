@@ -1,5 +1,3 @@
-# Dockerfile
-
 # Use official Python image
 FROM python:3.12.4-slim
 
@@ -20,14 +18,19 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copy entire repository into the container
 COPY . /app/
 
-# Change directory to the correct location of manage.py before running commands
-WORKDIR /app/project
+# Add wait-for-it script if needed for delays
+COPY wait-for-it.sh /wait-for-it.sh
+RUN chmod +x /wait-for-it.sh
+
+# Set up volume for logs (optional)
+VOLUME /app/logs
 
 # Collect static files
+WORKDIR /app/project
 RUN python manage.py collectstatic --noinput
 
 # Expose port 80 (required for Gunicorn to listen on this port)
 EXPOSE 80
 
-# Start the application using Gunicorn
-CMD ["gunicorn", "project.wsgi:application", "--bind", "0.0.0.0:80"]
+# Start the application, wait for db before migrations
+CMD ["sh", "-c", "./wait-for-it.sh db:5432 -- python manage.py migrate && gunicorn project.wsgi:application --bind 0.0.0.0:80"]
