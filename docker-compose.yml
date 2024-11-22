@@ -10,7 +10,7 @@ services:
     volumes:
       - ./media:/app/media
       - ./logs:/app/logs
-      - ./static:/app/static
+      - ./static:/app/project/staticfiles   # Mount to the correct STATIC_ROOT path
     depends_on:
       - db
     restart: always
