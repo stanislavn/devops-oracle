@@ -27,9 +27,9 @@ SECRET_KEY = os.getenv(
 )
 
 if DEBUG:
-    ALLOWED_HOSTS = ["localhost", "127.0.0.1", "[::1]"]
+    ALLOWED_HOSTS = ["localhost", "127.0.0.1", "[::1]", "*"]
 else:
-    ALLOWED_HOSTS = ["dev.nadzam.sk", "www.dev.nadzam.sk", "*.nadzam.sk"]
+    ALLOWED_HOSTS = ["django.nadzam.sk", "www.django.nadzam.sk", "*.nadzam.sk"]
 
 # Application definition
 
