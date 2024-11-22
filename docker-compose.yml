@@ -10,6 +10,7 @@ services:
     volumes:
       - ./media:/app/media
       - ./logs:/app/logs
+      - ./static:/app/static
     depends_on:
       - db
     restart: always
