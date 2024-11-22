@@ -26,8 +26,8 @@ WORKDIR /app/project
 # Collect static files
 RUN python manage.py collectstatic --noinput
 
-# Expose port 8000 to the host
-EXPOSE 8000
+# Expose port 80 (required for Gunicorn to listen on this port)
+EXPOSE 80
 
 # Start the application using Gunicorn
-CMD ["gunicorn", "project.wsgi:application", "--bind", "0.0.0.0:8000"]
+CMD ["gunicorn", "project.wsgi:application", "--bind", "0.0.0.0:80"]
