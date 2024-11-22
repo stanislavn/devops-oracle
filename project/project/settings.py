@@ -142,3 +142,14 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 # MEDIA SETUP
 MEDIA_URL = "/media/"
 MEDIA_ROOT = os.path.join(BASE_DIR, "media/")
+
+# Allow Proxy Headers For HTTPS
+USE_X_FORWARDED_HOST = True
+SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
+
+# Serve cookies securely
+CSRF_COOKIE_SECURE = True  # Ensures CSRF cookies are only sent over HTTPS
+SESSION_COOKIE_SECURE = True  # Makes session cookies only sent over HTTPS
+
+# Redirect all HTTP traffic to HTTPS
+SECURE_SSL_REDIRECT = True  # Redirect HTTP to HTTPS
