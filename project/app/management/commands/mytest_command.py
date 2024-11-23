@@ -1,4 +1,3 @@
-# test_command.py
 from django.core.management.base import BaseCommand
 
 

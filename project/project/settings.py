@@ -20,29 +20,6 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/5.1/howto/deployment/checklist/
 
-LOGGING = {
-    "version": 1,
-    "disable_existing_loggers": False,
-    "formatters": {
-        "verbose": {
-            "format": "[%(asctime)s] %(levelname)s %(message)s",
-            "datefmt": "%Y-%m-%d %H:%M:%S",  # Custom date format
-        },
-    },
-    "handlers": {
-        "file": {
-            "level": "INFO",
-            "class": "logging.FileHandler",
-            "filename": "/app/logs/django.log",
-            "formatter": "verbose",  # Attach the formatter here
-        },
-    },
-    "root": {
-        "handlers": ["file"],
-        "level": "INFO",
-    },
-}
-
 DEBUG = os.getenv("DEBUG", "False") == "True"
 
 SECRET_KEY = os.getenv(
@@ -52,7 +29,13 @@ SECRET_KEY = os.getenv(
 if DEBUG:
     ALLOWED_HOSTS = ["localhost", "127.0.0.1", "[::1]", "*"]
 else:
-    ALLOWED_HOSTS = ["django.nadzam.sk", "www.django.nadzam.sk", "*.nadzam.sk"]
+    ALLOWED_HOSTS = [
+        "django.nadzam.sk",
+        "www.django.nadzam.sk",
+        "*.nadzam.sk",
+        "127.0.0.1",
+        "152.67.72.228",
+    ]
 
 # Application definition
 
@@ -64,6 +47,7 @@ INSTALLED_APPS = [
     "django.contrib.contenttypes",
     "django.contrib.sessions",
     "django.contrib.messages",
+    "app",
 ]
 
 MIDDLEWARE = [
@@ -75,12 +59,10 @@ MIDDLEWARE = [
     "django.contrib.auth.middleware.AuthenticationMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
+    "axes.middleware.AxesMiddleware",
 ]
 
-# yolo
-
 STORAGES = {
-    # ...
     "staticfiles": {
         "BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage",
     },
@@ -121,6 +103,74 @@ if os.getenv("ENV") == "PRODUCTION":
             "PORT": os.getenv("POSTGRES_PORT", "5432"),
         }
     }
+
+    LOGGING = {
+        "version": 1,
+        "disable_existing_loggers": False,
+        "formatters": {
+            "verbose": {
+                "format": "[%(asctime)s] %(levelname)s %(message)s",
+                "datefmt": "%Y-%m-%d %H:%M:%S",
+            },
+        },
+        "handlers": {
+            "file_info": {  # Handler for general info logs
+                "level": "INFO",
+                "class": "logging.FileHandler",
+                "filename": "/app/logs/django_info.log",
+                "formatter": "verbose",
+            },
+            "file_error": {  # Handler for error logs
+                "level": "ERROR",
+                "class": "logging.FileHandler",
+                "filename": "/app/logs/django_error.log",
+                "formatter": "verbose",
+            },
+            "file_login": {  # Handler for login attempts
+                "level": "INFO",
+                "class": "logging.FileHandler",
+                "filename": "/app/logs/django_login.log",
+                "formatter": "verbose",
+            },
+        },
+        "loggers": {
+            "django": {  # General Django logs
+                "handlers": ["file_info", "file_error"],
+                "level": "INFO",
+                "propagate": True,
+            },
+            "django.security.LoginView": {  # Login attempts logs
+                "handlers": ["file_login"],
+                "level": "INFO",
+                "propagate": False,
+            },
+            "django.request": {  # Capture error logs separately
+                "handlers": ["file_error"],
+                "level": "ERROR",
+                "propagate": False,
+            },
+        },
+        "root": {
+            "handlers": ["file_info", "file_error"],
+            "level": "INFO",
+        },
+    }
+
+    # Allow Proxy Headers For HTTPS
+    USE_X_FORWARDED_HOST = True
+    SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
+
+    # Serve cookies securely
+    CSRF_COOKIE_SECURE = True  # Ensures CSRF cookies are only sent over HTTPS
+    SESSION_COOKIE_SECURE = True  # Makes session cookies only sent over HTTPS
+
+    # Redirect all HTTP traffic to HTTPS
+    SECURE_SSL_REDIRECT = True  # Redirect HTTP to HTTPS
+
+    AXES_FAILURE_LIMIT = 5  # Number of attempts before lockout
+    AXES_COOLOFF_TIME = 1  # Lockout duration in hours
+
+
 else:  # Local Development
     DATABASES = {
         "default": {
@@ -152,9 +202,8 @@ AUTH_PASSWORD_VALIDATORS = [
 # Internationalization
 # https://docs.djangoproject.com/en/5.1/topics/i18n/
 
-LANGUAGE_CODE = "en-us"
-
-TIME_ZONE = "UTC"
+LANGUAGE_CODE = "sk"
+TIME_ZONE = "Europe/Bratislava"
 
 USE_I18N = True
 
@@ -181,14 +230,3 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 # MEDIA SETUP
 MEDIA_URL = "/media/"
 MEDIA_ROOT = os.path.join(BASE_DIR, "media/")
-
-# Allow Proxy Headers For HTTPS
-USE_X_FORWARDED_HOST = True
-SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
-
-# Serve cookies securely
-CSRF_COOKIE_SECURE = True  # Ensures CSRF cookies are only sent over HTTPS
-SESSION_COOKIE_SECURE = True  # Makes session cookies only sent over HTTPS
-
-# Redirect all HTTP traffic to HTTPS
-SECURE_SSL_REDIRECT = True  # Redirect HTTP to HTTPS
