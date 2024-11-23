@@ -35,6 +35,7 @@ else:
         "*.nadzam.sk",
         "127.0.0.1",
         "152.67.72.228",
+        "0.0.0.0",
     ]
 
 # Application definition
