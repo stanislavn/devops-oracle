@@ -23,11 +23,18 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 LOGGING = {
     "version": 1,
     "disable_existing_loggers": False,
+    "formatters": {
+        "verbose": {
+            "format": "[%(asctime)s] %(levelname)s %(message)s",
+            "datefmt": "%Y-%m-%d %H:%M:%S",  # Custom date format
+        },
+    },
     "handlers": {
         "file": {
             "level": "INFO",
             "class": "logging.FileHandler",
             "filename": "/app/logs/django.log",
+            "formatter": "verbose",  # Attach the formatter here
         },
     },
     "root": {
@@ -61,7 +68,7 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
-    "whitenoise.middleware.WhiteNoiseMiddleware",  # yolo
+    "whitenoise.middleware.WhiteNoiseMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
@@ -161,6 +168,9 @@ STATIC_URL = "/static/"
 STATIC_ROOT = os.path.join(
     BASE_DIR, "staticfiles"
 )  # Common practice to use 'staticfiles' for production
+STATICFILES_STORAGE = (
+    "whitenoise.storage.CompressedManifestStaticFilesStorage"  # Required for whitenoise
+)
 
 
 # Default primary key field type
