@@ -33,4 +33,4 @@ RUN python manage.py collectstatic --noinput
 EXPOSE 80
 
 # Start the application, wait for db before migrations
-CMD ["sh", "-c", "./wait-for-it.sh db:5432 -- python manage.py migrate && gunicorn project.wsgi:application --bind 0.0.0.0:80"]
+CMD ["sh", "-c", "/wait-for-it.sh db:5432 -- python manage.py migrate && gunicorn project.wsgi:application --bind 0.0.0.0:80"]
