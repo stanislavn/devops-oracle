@@ -9,13 +9,14 @@ ENV PYTHONUNBUFFERED 1
 WORKDIR /app
 
 # Install necessary tools for backup tasks
+# For envsubst command we need gettext-base
 RUN apt-get update && apt-get install -y --no-install-recommends \
     cron \
     postgresql-client \
     tar \
     gzip \
     rclone \
-    gettext-base \  # For envsubst command
+    gettext-base \
     && rm -rf /var/lib/apt/lists/*  # Clean up to reduce image size
 
 # Copy application code and install dependencies
@@ -27,6 +28,7 @@ COPY backup.sh /app/backup.sh
 RUN chmod +x /app/backup.sh
 
 # Copy rclone configuration template
+RUN mkdir -p /root/.config/rclone
 COPY rclone.conf.template /root/.config/rclone/rclone.conf.template
 
 # Copy rclone setup script
