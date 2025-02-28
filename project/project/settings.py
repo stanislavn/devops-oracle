@@ -181,8 +181,6 @@ if os.getenv("ENV") == "PRODUCTION":
     CSRF_TRUSTED_ORIGINS = [
         "https://django.nadzam.sk",
         "https://www.django.nadzam.sk",
-        "http://django.nadzam.sk",  # Include HTTP version
-        "http://www.django.nadzam.sk",  # Include HTTP version
     ]
 
     # Required for Cloudflare
