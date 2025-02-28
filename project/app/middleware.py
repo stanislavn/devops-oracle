@@ -1,4 +1,5 @@
 import logging
+from django.conf import settings
 
 logger = logging.getLogger("django.request")
 
@@ -22,3 +23,18 @@ class CSRFDebugMiddleware:
             )
 
         return response
+
+
+class FixedSecureProxyMiddleware:
+    def __init__(self, get_response):
+        self.get_response = get_response
+
+    def __call__(self, request):
+        # Force is_secure() to return True when appropriate headers are present
+        if (
+            "HTTP_X_FORWARDED_PROTO" in request.META
+            and request.META["HTTP_X_FORWARDED_PROTO"] == "https"
+        ):
+            request.is_secure = lambda: True
+
+        return self.get_response(request)

@@ -54,6 +54,7 @@ INSTALLED_APPS = [
 ]
 
 MIDDLEWARE = [
+    "app.middleware.FixedSecureProxyMiddleware",  # Add this FIRST
     "django.middleware.security.SecurityMiddleware",
     "whitenoise.middleware.WhiteNoiseMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",  # This must come before CSRF
@@ -178,13 +179,17 @@ if os.getenv("ENV") == "PRODUCTION":
     CSRF_USE_SESSIONS = True  # Store CSRF token in the session instead of cookie
     CSRF_COOKIE_HTTPONLY = True  # HttpOnly flag on CSRF cookie
 
-    # CSRF Settings - include Cloudflare IPs and your domains
+    # CSRF Settings - full scheme+domain format is required for Django
     CSRF_TRUSTED_ORIGINS = [
         "https://django.nadzam.sk",
         "https://www.django.nadzam.sk",
     ]
 
-    # Required for Cloudflare
+    # CRITICAL: These settings tell Django to recognize HTTPS requests via Cloudflare
+    SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
+
+    # Ensure these are TRUE to correctly handle Cloudflare-proxied requests
+    USE_X_FORWARDED_HOST = True
     USE_X_FORWARDED_PORT = True
 
     # Cookie settings for Cloudflare
@@ -330,3 +335,6 @@ SESSION_ENGINE = "django.contrib.sessions.backends.db"
 
 # Custom CSRF failure view
 CSRF_FAILURE_VIEW = "app.views.csrf_failure"
+
+SECURE_SSL_REDIRECT = False  # Don't redirect during testing
+CSRF_USE_SESSIONS = False  # Use default cookie-based tokens for now
