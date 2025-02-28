@@ -10,7 +10,7 @@ services:
     volumes:
       - ./media:/app/media
       - ./logs:/app/logs
-      - ./static:/app/project/staticfiles   # Mount to the correct STATIC_ROOT path
+      - ./static:/app/project/staticfiles
     depends_on:
       - db
     restart: always
@@ -34,7 +34,7 @@ services:
     volumes:
       - ./media:/app/media
       - backup-volume:/backups
-      - rclone-config:/root/.config/rclone  # Store rclone config in a volume
+      - rclone-config:/root/.config/rclone
     env_file:
       - .env.prod
     depends_on:
@@ -44,4 +44,4 @@ services:
 volumes:
   postgres-data:
   backup-volume:
-  rclone-config:  # New volume for rclone configuration
+  rclone-config:

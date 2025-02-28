@@ -15,30 +15,19 @@ RUN apt-get update && apt-get install -y --no-install-recommends gcc libpq-dev
 COPY requirements.txt /app/
 RUN pip install --no-cache-dir -r requirements.txt
 
+# Copy entrypoint script
+COPY docker-entrypoint.sh /app/
+COPY wait-for-it.sh /app/
+RUN chmod +x /app/docker-entrypoint.sh /app/wait-for-it.sh
+
 # Copy entire repository into the container
 COPY . /app/
 
-# Add wait-for-it script if needed fordepl delays
-COPY wait-for-it.sh /wait-for-it.sh
-RUN chmod +x /wait-for-it.sh
-
-# Set up volume for logs (optional)
+# Set up volume for logs
 VOLUME /app/logs
 
-# Collect static files
-WORKDIR /app/project
-RUN python manage.py collectstatic --noinput
-
-# Expose port 80 (required for Gunicorn to listen on this port)
+# Expose port 80
 EXPOSE 80
 
-# Create entrypoint script for handling migrations
-RUN echo '#!/bin/bash\n\
-cd /app/project\n\
-python manage.py makemigrations\n\
-/wait-for-it.sh db:5432 -- python manage.py migrate\n\
-gunicorn project.wsgi:application --bind 0.0.0.0:80\n\
-' > /app/entrypoint.sh && chmod +x /app/entrypoint.sh
-
-# Start the application using our migration-aware script
-CMD ["/app/entrypoint.sh"]
+# Use the entrypoint script
+ENTRYPOINT ["/app/docker-entrypoint.sh"]
