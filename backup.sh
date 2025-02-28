@@ -1,17 +1,14 @@
 #!/bin/bash
 
-# Environment Variables (Load from .env.prod)
-set -a                             # Auto-export variables
-source /home/ubuntu/django-app/devops-oracle/.env.prod  # Update this path to your .env.prod file
-set +a                             # Disable auto-export
+# Environment variables are loaded from .env.prod via docker-compose
 
 # Variables
-BACKUP_DIR="/home/ubuntu/backups"          # Full path for local backups
-DB_CONTAINER="devops-oracle_db_1"         # Correct name of your PostgreSQL container
-DATE=$(date +%Y%m%d-%H%M%S)               # Timestamp for unique filenames
-MEDIA_DIR="/home/ubuntu/django-app/devops-oracle/media"  # Correct media folder path
-REMOTE_NAME="nextcloud"                   # Rclone remote name for Nextcloud
-REMOTE_DIR="backups"                      # Remote directory in Nextcloud
+BACKUP_DIR="/backups"
+DB_HOST="db"  # use service name from docker-compose
+DATE=$(date +%Y%m%d-%H%M%S)
+MEDIA_DIR="/app/media"  # path inside container
+REMOTE_NAME="nextcloud"
+REMOTE_DIR="backups"
 
 # Ensure backup directory exists
 echo "Ensuring backup directory exists..."
@@ -23,7 +20,7 @@ fi
 
 # Step 1: Backup Database
 echo "Backing up database..."
-docker exec $DB_CONTAINER sh -c "PGPASSWORD=$POSTGRES_PASSWORD pg_dump -U $POSTGRES_USER $POSTGRES_DB" | gzip > $BACKUP_DIR/db_backup_$DATE.sql.gz
+PGPASSWORD=$POSTGRES_PASSWORD pg_dump -h $DB_HOST -U $POSTGRES_USER $POSTGRES_DB | gzip > $BACKUP_DIR/db_backup_$DATE.sql.gz
 
 if [ $? -eq 0 ]; then
     echo "Database backup successful: $BACKUP_DIR/db_backup_$DATE.sql.gz"

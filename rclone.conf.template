@@ -1,0 +1,5 @@
+[nextcloud]
+type = webdav
+url = ${NEXTCLOUD_URL}
+user = ${NEXTCLOUD_USER}
+pass = ${NEXTCLOUD_PASSWORD}
