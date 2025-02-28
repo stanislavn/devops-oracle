@@ -24,7 +24,15 @@ jobs:
         ssh -o StrictHostKeyChecking=no ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} << EOF
         cd /home/ubuntu/django-app/devops-oracle
         git reset --hard origin/main && git pull origin main
-        docker-compose down
-        docker-compose build --no-cache web
+        
+        # Stop only the web container, leaving db untouched
+        docker-compose stop web
+        docker-compose rm -f web
+        
+        # Rebuild and start only the web container
+        docker-compose build web
         docker-compose up -d
+        
+        # Verify containers are running
+        docker-compose ps
         EOF
