@@ -32,5 +32,13 @@ RUN python manage.py collectstatic --noinput
 # Expose port 80 (required for Gunicorn to listen on this port)
 EXPOSE 80
 
-# Start the application, wait for db before migrations
-CMD ["sh", "-c", "/wait-for-it.sh db:5432 -- python manage.py migrate && gunicorn project.wsgi:application --bind 0.0.0.0:80"]
+# Create entrypoint script for handling migrations
+RUN echo '#!/bin/bash\n\
+cd /app/project\n\
+python manage.py makemigrations\n\
+/wait-for-it.sh db:5432 -- python manage.py migrate\n\
+gunicorn project.wsgi:application --bind 0.0.0.0:80\n\
+' > /app/entrypoint.sh && chmod +x /app/entrypoint.sh
+
+# Start the application using our migration-aware script
+CMD ["/app/entrypoint.sh"]

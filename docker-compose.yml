@@ -14,12 +14,7 @@ services:
     depends_on:
       - db
     restart: always
-    command: >
-      sh -c "
-      /wait-for-it.sh db:5432 -- python manage.py migrate &&
-      gunicorn project.wsgi:application --bind 0.0.0.0:80
-      "
-      
+
   db:
     image: postgres:15
     env_file:
