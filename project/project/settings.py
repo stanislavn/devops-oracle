@@ -237,3 +237,69 @@ AUTHENTICATION_BACKENDS = [
     "axes.backends.AxesStandaloneBackend",  # Add this line
     "django.contrib.auth.backends.ModelBackend",  # Default Django backend
 ]
+
+# Logging configuration
+LOGS_DIR = os.path.join(BASE_DIR, 'logs')
+if not os.path.exists(LOGS_DIR):
+    os.makedirs(LOGS_DIR)
+
+LOGGING = {
+    'version': 1,
+    'disable_existing_loggers': False,
+    'formatters': {
+        'verbose': {
+            'format': '{levelname} {asctime} {module} {process:d} {thread:d} {message}',
+            'style': '{',
+        },
+        'simple': {
+            'format': '{levelname} {asctime} {message}',
+            'style': '{',
+        },
+    },
+    'filters': {
+        'require_debug_true': {
+            '()': 'django.utils.log.RequireDebugTrue',
+        },
+    },
+    'handlers': {
+        'console': {
+            'level': 'INFO',
+            'filters': ['require_debug_true'],
+            'class': 'logging.StreamHandler',
+            'formatter': 'simple',
+        },
+        'file': {
+            'level': 'INFO',
+            'class': 'logging.handlers.RotatingFileHandler',
+            'filename': os.path.join(LOGS_DIR, 'django.log'),
+            'maxBytes': 1024*1024*5,  # 5 MB
+            'backupCount': 5,
+            'formatter': 'verbose',
+        },
+        'management_commands': {
+            'level': 'INFO',
+            'class': 'logging.handlers.RotatingFileHandler',
+            'filename': os.path.join(LOGS_DIR, 'management_commands.log'),
+            'maxBytes': 1024*1024*5,  # 5 MB
+            'backupCount': 5,
+            'formatter': 'verbose',
+        },
+    },
+    'loggers': {
+        'django': {
+            'handlers': ['console', 'file'],
+            'level': 'INFO',
+            'propagate': True,
+        },
+        'django.request': {
+            'handlers': ['file'],
+            'level': 'INFO',
+            'propagate': False,
+        },
+        'app.management.commands': {
+            'handlers': ['console', 'management_commands'],
+            'level': 'INFO',
+            'propagate': False,
+        },
+    },
+}

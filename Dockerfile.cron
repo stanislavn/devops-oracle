@@ -37,6 +37,7 @@ RUN chmod +x /setup-rclone.sh
 
 # Create crontab file
 RUN echo "0 2 * * * /app/backup.sh >> /var/log/cron.log 2>&1" > /etc/cron.d/backup-cron
+RUN echo "0 4 * * * cd /app && python project/manage.py cleanup_logs --days=7 >> /var/log/management_commands.log 2>&1" >> /etc/cron.d/backup-cron
 RUN chmod 0644 /etc/cron.d/backup-cron
 RUN crontab /etc/cron.d/backup-cron
 
