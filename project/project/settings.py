@@ -20,7 +20,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/5.1/howto/deployment/checklist/
 
-DEBUG = True  # Temporarily set to True to see error details
+DEBUG = True  # Set to False after debugging
 
 SECRET_KEY = os.getenv(
     "SECRET_KEY", "django-insecure-*g1#wak^caj_+!46qrpxd0y$hu%1w@)*k@f1s4tt(goho(3g*0"
@@ -63,6 +63,7 @@ MIDDLEWARE = [
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
     "axes.middleware.AxesMiddleware",  # Should be last
+    "app.middleware.CSRFDebugMiddleware",  # Add at the end
 ]
 
 STORAGES = {
@@ -188,6 +189,10 @@ if os.getenv("ENV") == "PRODUCTION":
 
     # Cookie settings for Cloudflare
     CSRF_COOKIE_SAMESITE = "Lax"  # Less restrictive than 'Strict'
+
+    # Additional security headers
+    SECURE_BROWSER_XSS_FILTER = True
+    SECURE_CONTENT_TYPE_NOSNIFF = True
 
 else:  # Local Development
     DATABASES = {
@@ -322,3 +327,6 @@ LOGGING = {
 
 # Use database sessions for better reliability
 SESSION_ENGINE = "django.contrib.sessions.backends.db"
+
+# Custom CSRF failure view
+CSRF_FAILURE_VIEW = "app.views.csrf_failure"

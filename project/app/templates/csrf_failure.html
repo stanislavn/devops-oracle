@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>CSRF Failure</title>
+    <style>
+        body { font-family: Arial, sans-serif; padding: 20px; }
+        .debug { background: #f5f5f5; padding: 15px; border-radius: 5px; }
+        pre { overflow: auto; }
+    </style>
+</head>
+<body>
+    <h1>CSRF Verification Failed</h1>
+    <p>Reason: {{ reason }}</p>
+    
+    <div class="debug">
+        <h2>Debug Information:</h2>
+        <p>Is HTTPS: {{ is_secure }}</p>
+        <p>Path: {{ path }}</p>
+        
+        <h3>Headers:</h3>
+        <pre>{% for key, value in headers.items %}{{ key }}: {{ value }}
+{% endfor %}</pre>
+    </div>
+    
+    <p><a href="/">Return to home</a></p>
+</body>
+</html>
