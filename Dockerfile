@@ -15,10 +15,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends gcc libpq-dev
 COPY requirements.txt /app/
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy entrypoint script
-COPY docker-entrypoint.sh /app/
-COPY wait-for-it.sh /app/
-RUN chmod +x /app/docker-entrypoint.sh /app/wait-for-it.sh
+# Copy wait-for-it script
+COPY wait-for-it.sh /wait-for-it.sh
+RUN chmod +x /wait-for-it.sh
 
 # Copy entire repository into the container
 COPY . /app/
@@ -26,8 +25,12 @@ COPY . /app/
 # Set up volume for logs
 VOLUME /app/logs
 
+# Collect static files
+WORKDIR /app/project
+RUN python manage.py collectstatic --noinput
+
 # Expose port 80
 EXPOSE 80
 
-# Use the entrypoint script
-ENTRYPOINT ["/app/docker-entrypoint.sh"]
+# Start the application with migrations
+CMD /wait-for-it.sh db:5432 -- bash -c "cd /app/project && python manage.py makemigrations && python manage.py migrate && gunicorn project.wsgi:application --bind 0.0.0.0:80"
