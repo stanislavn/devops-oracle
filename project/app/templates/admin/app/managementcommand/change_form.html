@@ -5,8 +5,8 @@
 {{ block.super }}
 {% if original %}
 <li>
-    <a href="{% url 'admin:run-management-command' original.name %}" class="button">
-        Run Command
+    <a href="{% url 'admin:run-management-command' original.name %}" class="historylink">
+        {% trans "Run Command" %}
     </a>
 </li>
 {% endif %}
