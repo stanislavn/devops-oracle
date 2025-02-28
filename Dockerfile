@@ -18,7 +18,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copy entire repository into the container
 COPY . /app/
 
-# Add wait-for-it script if needed for delays
+# Add wait-for-it script if needed fordepl delays
 COPY wait-for-it.sh /wait-for-it.sh
 RUN chmod +x /wait-for-it.sh
 

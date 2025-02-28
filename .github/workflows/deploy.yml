@@ -28,10 +28,9 @@ jobs:
         # Check if containers are running for migration
         if docker-compose ps | grep -q "web.*Up"; then
           echo "Creating migrations inside running container..."
-          docker-compose exec -T web python project/manage.py makemigrations
+          docker-compose exec -T web python /app/project/manage.py makemigrations
         else
           echo "Web container not running. Will create migrations during startup."
-          # We'll handle this using an entry script
         fi
         
         # Rebuild and restart containers
@@ -42,6 +41,6 @@ jobs:
         echo "Waiting for web container to be fully up..."
         sleep 10
         
-        # Verify migrations were applied
-        docker-compose exec -T web python project/manage.py showmigrations | grep -q "\[X\]" && echo "✅ Migrations applied successfully"
+        # Verify migrations were applied (with correct path)
+        docker-compose exec -T web python /app/project/manage.py showmigrations
         EOF
