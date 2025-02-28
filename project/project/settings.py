@@ -36,6 +36,7 @@ else:
         "127.0.0.1",
         "152.67.72.228",
         "0.0.0.0",
+        "localhost",
     ]
 
 # Application definition
@@ -176,12 +177,19 @@ if os.getenv("ENV") == "PRODUCTION":
     CSRF_USE_SESSIONS = True  # Store CSRF token in the session instead of cookie
     CSRF_COOKIE_HTTPONLY = True  # HttpOnly flag on CSRF cookie
 
-    # CSRF Settings
+    # CSRF Settings - include Cloudflare IPs and your domains
     CSRF_TRUSTED_ORIGINS = [
         "https://django.nadzam.sk",
         "https://www.django.nadzam.sk",
-        # Add any other domains you use to access your site
+        "http://django.nadzam.sk",  # Include HTTP version
+        "http://www.django.nadzam.sk",  # Include HTTP version
     ]
+
+    # Required for Cloudflare
+    USE_X_FORWARDED_PORT = True
+
+    # Cookie settings for Cloudflare
+    CSRF_COOKIE_SAMESITE = "Lax"  # Less restrictive than 'Strict'
 
 else:  # Local Development
     DATABASES = {
