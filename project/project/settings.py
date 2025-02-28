@@ -176,6 +176,13 @@ if os.getenv("ENV") == "PRODUCTION":
     CSRF_USE_SESSIONS = True  # Store CSRF token in the session instead of cookie
     CSRF_COOKIE_HTTPONLY = True  # HttpOnly flag on CSRF cookie
 
+    # CSRF Settings
+    CSRF_TRUSTED_ORIGINS = [
+        "https://django.nadzam.sk",
+        "https://www.django.nadzam.sk",
+        # Add any other domains you use to access your site
+    ]
+
 else:  # Local Development
     DATABASES = {
         "default": {
