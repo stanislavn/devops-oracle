@@ -20,7 +20,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/5.1/howto/deployment/checklist/
 
-DEBUG = os.getenv("DEBUG", "False") == "True"
+DEBUG = True  # Temporarily set to True to see error details
 
 SECRET_KEY = os.getenv(
     "SECRET_KEY", "django-insecure-*g1#wak^caj_+!46qrpxd0y$hu%1w@)*k@f1s4tt(goho(3g*0"
@@ -55,13 +55,13 @@ INSTALLED_APPS = [
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
     "whitenoise.middleware.WhiteNoiseMiddleware",
-    "django.contrib.sessions.middleware.SessionMiddleware",
+    "django.contrib.sessions.middleware.SessionMiddleware",  # This must come before CSRF
     "django.middleware.common.CommonMiddleware",
-    "django.middleware.csrf.CsrfViewMiddleware",
+    "django.middleware.csrf.CsrfViewMiddleware",  # This must come after Session but before Auth
     "django.contrib.auth.middleware.AuthenticationMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
-    "axes.middleware.AxesMiddleware",
+    "axes.middleware.AxesMiddleware",  # Should be last
 ]
 
 STORAGES = {
@@ -167,11 +167,14 @@ if os.getenv("ENV") == "PRODUCTION":
     SESSION_COOKIE_SECURE = True  # Makes session cookies only sent over HTTPS
 
     # Redirect all HTTP traffic to HTTPS
-    SECURE_SSL_REDIRECT = True  # Redirect HTTP to HTTPS
+    SECURE_SSL_REDIRECT = not DEBUG  # True in production
 
     AXES_FAILURE_LIMIT = 5  # Number of attempts before lockout
     AXES_COOLOFF_TIME = 1  # Lockout duration in hours
 
+    # Cookie settings
+    CSRF_USE_SESSIONS = True  # Store CSRF token in the session instead of cookie
+    CSRF_COOKIE_HTTPONLY = True  # HttpOnly flag on CSRF cookie
 
 else:  # Local Development
     DATABASES = {
@@ -239,67 +242,70 @@ AUTHENTICATION_BACKENDS = [
 ]
 
 # Logging configuration
-LOGS_DIR = os.path.join(BASE_DIR, 'logs')
+LOGS_DIR = os.path.join(BASE_DIR, "logs")
 if not os.path.exists(LOGS_DIR):
     os.makedirs(LOGS_DIR)
 
 LOGGING = {
-    'version': 1,
-    'disable_existing_loggers': False,
-    'formatters': {
-        'verbose': {
-            'format': '{levelname} {asctime} {module} {process:d} {thread:d} {message}',
-            'style': '{',
+    "version": 1,
+    "disable_existing_loggers": False,
+    "formatters": {
+        "verbose": {
+            "format": "{levelname} {asctime} {module} {process:d} {thread:d} {message}",
+            "style": "{",
         },
-        'simple': {
-            'format': '{levelname} {asctime} {message}',
-            'style': '{',
-        },
-    },
-    'filters': {
-        'require_debug_true': {
-            '()': 'django.utils.log.RequireDebugTrue',
+        "simple": {
+            "format": "{levelname} {asctime} {message}",
+            "style": "{",
         },
     },
-    'handlers': {
-        'console': {
-            'level': 'INFO',
-            'filters': ['require_debug_true'],
-            'class': 'logging.StreamHandler',
-            'formatter': 'simple',
-        },
-        'file': {
-            'level': 'INFO',
-            'class': 'logging.handlers.RotatingFileHandler',
-            'filename': os.path.join(LOGS_DIR, 'django.log'),
-            'maxBytes': 1024*1024*5,  # 5 MB
-            'backupCount': 5,
-            'formatter': 'verbose',
-        },
-        'management_commands': {
-            'level': 'INFO',
-            'class': 'logging.handlers.RotatingFileHandler',
-            'filename': os.path.join(LOGS_DIR, 'management_commands.log'),
-            'maxBytes': 1024*1024*5,  # 5 MB
-            'backupCount': 5,
-            'formatter': 'verbose',
+    "filters": {
+        "require_debug_true": {
+            "()": "django.utils.log.RequireDebugTrue",
         },
     },
-    'loggers': {
-        'django': {
-            'handlers': ['console', 'file'],
-            'level': 'INFO',
-            'propagate': True,
+    "handlers": {
+        "console": {
+            "level": "INFO",
+            "filters": ["require_debug_true"],
+            "class": "logging.StreamHandler",
+            "formatter": "simple",
         },
-        'django.request': {
-            'handlers': ['file'],
-            'level': 'INFO',
-            'propagate': False,
+        "file": {
+            "level": "INFO",
+            "class": "logging.handlers.RotatingFileHandler",
+            "filename": os.path.join(LOGS_DIR, "django.log"),
+            "maxBytes": 1024 * 1024 * 5,  # 5 MB
+            "backupCount": 5,
+            "formatter": "verbose",
         },
-        'app.management.commands': {
-            'handlers': ['console', 'management_commands'],
-            'level': 'INFO',
-            'propagate': False,
+        "management_commands": {
+            "level": "INFO",
+            "class": "logging.handlers.RotatingFileHandler",
+            "filename": os.path.join(LOGS_DIR, "management_commands.log"),
+            "maxBytes": 1024 * 1024 * 5,  # 5 MB
+            "backupCount": 5,
+            "formatter": "verbose",
+        },
+    },
+    "loggers": {
+        "django": {
+            "handlers": ["console", "file"],
+            "level": "INFO",
+            "propagate": True,
+        },
+        "django.request": {
+            "handlers": ["file"],
+            "level": "INFO",
+            "propagate": False,
+        },
+        "app.management.commands": {
+            "handlers": ["console", "management_commands"],
+            "level": "INFO",
+            "propagate": False,
         },
     },
 }
+
+# Use database sessions for better reliability
+SESSION_ENGINE = "django.contrib.sessions.backends.db"
