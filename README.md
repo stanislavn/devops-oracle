@@ -1,112 +1,203 @@
-# Django template + VPS, Docker, Github actions
+# Django Project Deployment Guide
 
-Sup bro
+This Django application is deployed using a modern DevOps pipeline with Docker, GitHub Actions, and a VPS (Virtual Private Server). The deployment is designed to be reliable, maintainable, and secure with automated migrations and database persistence.
 
-## Installation
+## Deployment Architecture
 
-## Backup
-```
-apt-get install postgresql-client tar gzip rclone
+### Key Components
 
-rclone config
-```
+1. **Docker Containers**:
+   - **Web**: Django application running with Gunicorn
+   - **DB**: PostgreSQL database with persistent volume
+   - **Cron**: Container for scheduled tasks (backups, maintenance)
 
-backup.sh
-```
-#!/bin/bash
+2. **Persistence**:
+   - PostgreSQL data stored in an external Docker volume (`postgres_data`)
+   - Media files stored in mounted directories
 
-# Environment Variables (Load from .env.prod)
-set -a                             # Auto-export variables
-source /home/ubuntu/django-app/devops-oracle/.env.prod  # Update this path to your .env.prod file
-set +a                             # Disable auto-export
+3. **Automation**:
+   - GitHub Actions workflow for CI/CD
+   - Automatic migrations during deployment
 
-# Variables
-BACKUP_DIR="/home/ubuntu/backups"          # Full path for local backups
-DB_CONTAINER="devops-oracle_db_1"         # Correct name of your PostgreSQL container
-DATE=$(date +%Y%m%d-%H%M%S)               # Timestamp for unique filenames
-MEDIA_DIR="/home/ubuntu/django-app/devops-oracle/media"  # Correct media folder path
-REMOTE_NAME="nextcloud"                   # Rclone remote name for Nextcloud
-REMOTE_DIR="backups"                      # Remote directory in Nextcloud
+## Deployment Workflow
 
-# Ensure backup directory exists
-echo "Ensuring backup directory exists..."
-mkdir -p $BACKUP_DIR
-if [ ! -d "$BACKUP_DIR" ]; then
-    echo "Error: Unable to create backup directory: $BACKUP_DIR"
-    exit 1
-fi
+### 1. Initial Server Setup
 
-# Step 1: Backup Database
-echo "Backing up database..."
-docker exec $DB_CONTAINER sh -c "PGPASSWORD=$POSTGRES_PASSWORD pg_dump -U $POSTGRES_USER $POSTGRES_DB" | gzip > $BACKUP_DIR/db_backup_$DATE.sql.gz
+```bash
+# SSH into your VPS
+ssh username@your_server_ip
 
-if [ $? -eq 0 ]; then
-    echo "Database backup successful: $BACKUP_DIR/db_backup_$DATE.sql.gz"
-else
-    echo "Database backup failed!"
-    exit 1
-fi
+# Create project directory
+mkdir -p /home/ubuntu/django-app
+cd /home/ubuntu/django-app
 
-# Step 2: Backup Media Files
-echo "Backing up media files..."
-tar -czf $BACKUP_DIR/media_backup_$DATE.tar.gz -C $(dirname $MEDIA_DIR) $(basename $MEDIA_DIR)
+# Clone repository
+git clone https://github.com/your-repo/devops-oracle.git
+cd devops-oracle
 
-if [ $? -eq 0 ]; then
-    echo "Media backup successful: $BACKUP_DIR/media_backup_$DATE.tar.gz"
-else
-    echo "Media backup failed!"
-    exit 1
-fi
-
-# Step 3: Upload to Nextcloud
-echo "Uploading backups to Nextcloud..."
-rclone copy $BACKUP_DIR $REMOTE_NAME:$REMOTE_DIR
-
-if [ $? -eq 0 ]; then
-    echo "Upload to Nextcloud successful!"
-else
-    echo "Upload to Nextcloud failed!"
-    exit 1
-fi
-
-# Step 4: Cleanup old local backups (retain only the last 7 days)
-echo "Cleaning up old local backups..."
-find $BACKUP_DIR -type f -mtime +7 -exec rm {} \;
-
-echo "Backup completed successfully."
-```
-```
-chmod +x /path/to/backup.sh
-crontab -e
-0 2 * * * /path/to/backup.sh >> /path/to/backup.log 2>&1
-crontab -l
-```
-To restore:
-```
-gunzip -c /path/to/db_backup_TIMESTAMP.sql.gz | docker exec -i db psql -U myuser -d mydb
-```
-Restore media
-```
-tar -xzf /path/to/media_backup_TIMESTAMP.tar.gz -C /path/to/restore/location
+# Set up the database volume
+chmod +x init-volume.sh
+./init-volume.sh
 ```
 
+### 2. Environment Configuration
 
-## sdsdsd
+Create an `.env.prod` file with:
 
-PART 6: MANAGEMENT COMMAND USAGE
+```
+# Set environment to PRODUCTION to use PostgreSQL
+ENV=PRODUCTION
 
-Run management commands within the Docker container:
+# Database settings
+POSTGRES_DB=mydb
+POSTGRES_USER=myuser
+POSTGRES_PASSWORD=mypassword
+POSTGRES_HOST=db
+POSTGRES_PORT=5432
+
+DEBUG=False
+SECRET_KEY=your_secure_secret_key
 ```
-docker-compose exec web python manage.py test_command
+
+### 3. GitHub Actions Workflow
+
+The CI/CD pipeline in `.github/workflows/deploy.yml` handles:
+
+1. **Code Updates**: Pull the latest code from GitHub
+2. **Volume Management**: Ensure PostgreSQL volume exists and is correctly configured
+3. **Database Backup**: Create a backup before any changes
+4. **Container Rebuild**: Stop, rebuild, and restart containers
+5. **Migration Management**: Automatically create and apply migrations
+6. **Admin Setup**: Create admin user if it doesn't exist
+7. **Monitoring**: Check logs to verify successful deployment
+
+### 4. Database Persistence Logic
+
+The most critical component is database persistence, which is achieved by:
+
+1. **Named External Volume**: Using a consistent, named external volume for PostgreSQL:
+   ```yaml
+   volumes:
+     postgres_data:
+       name: postgres_data
+       external: true
+   ```
+
+2. **Environment Variable**: Setting `ENV=PRODUCTION` in `.env.prod` to ensure PostgreSQL is used.
+
+3. **Settings Configuration**: Django's `settings.py` has conditional logic:
+   ```python
+   if os.getenv("ENV") == "PRODUCTION":
+       # PostgreSQL configuration for production
+   else:
+       # SQLite for local development
+   ```
+
+### 5. Migration Management
+
+Migrations are handled automatically in the `Dockerfile` start script, which:
+
+1. Waits for the database to be ready
+2. Lists existing migrations
+3. Creates new migrations if needed (`makemigrations`)
+4. Applies all migrations (`migrate`)
+5. Verifies all migrations were applied
+6. Registers management commands
+7. Creates an admin user if it doesn't exist
+
+### 6. Backup Strategy
+
+Regular backups are performed via:
+
+1. **Scheduled Backups**: The cron container runs `backup.sh` daily
+2. **Pre-Deployment Backups**: The GitHub Actions workflow backs up the database before each deployment
+3. **Remote Storage**: Backups are sent to Nextcloud via rclone
+4. **Retention Policy**: Automatic cleanup of backups older than 7 days
+
+## Troubleshooting & Maintenance
+
+### Checking Logs
+
+```bash
+docker-compose logs web
 ```
-## Rebuild
+
+### Manual Database Management
+
+```bash
+# Access PostgreSQL CLI
+docker-compose exec db psql -U myuser -d mydb
+
+# Create superuser
+docker-compose exec web bash -c "cd /app/project && python manage.py createsuperuser"
 ```
+
+### Volume Management
+
+```bash
+# Check volumes
+docker volume ls | grep postgres
+
+# Inspect volume
+docker inspect postgres_data
+```
+
+### Manual Rebuild
+
+```bash
 docker-compose build && docker-compose up -d --force-recreate
 ```
 
-## Access docker container
+## Important Deployment Considerations
 
-docker-compose exec web bash
+1. **Database Environment**: Always ensure `ENV=PRODUCTION` is set in `.env.prod` to prevent using SQLite in production
+2. **Volume Persistence**: Never delete the `postgres_data` volume to avoid data loss
+3. **Secrets Management**: Keep credentials secure and never expose them in code
+4. **Backup Verification**: Regularly test backup and restore procedures
+5. **Migration Testing**: Test migrations locally before deploying to production
+
+## Deployment Checklist
+
+- ✅ Database is configured to use PostgreSQL in production
+- ✅ External volume is created and properly referenced
+- ✅ Environment variables are correctly set
+- ✅ Migrations are automatically created and applied
+- ✅ Backup system is functioning
+- ✅ Admin user is created automatically
+
+## Backup and Restore
+
+### Setting Up Backups
+
+1. Install required tools:
+   ```bash
+   apt-get install postgresql-client tar gzip rclone
+   ```
+
+2. Configure rclone for Nextcloud:
+   ```bash
+   rclone config
+   ```
+
+3. Use the provided backup script:
+   ```bash
+   chmod +x backup.sh
+   crontab -e
+   # Add the following line to run daily at 2 AM:
+   0 2 * * * /path/to/backup.sh >> /path/to/backup.log 2>&1
+   ```
+
+### Restoring from Backup
+
+To restore the database:
+```bash
+gunzip -c /path/to/db_backup_TIMESTAMP.sql.gz | docker exec -i db psql -U myuser -d mydb
+```
+
+To restore media files:
+```bash
+tar -xzf /path/to/media_backup_TIMESTAMP.tar.gz -C /path/to/restore/location
+```
 
 ## Initial Setup
 
@@ -142,3 +233,5 @@ After each deployment:
    ```bash
    docker-compose exec web bash -c "cd /app/project && python manage.py createsuperuser"
    ```
+
+By following this deployment guide, your Django application will maintain data persistence, apply migrations automatically, and provide a reliable user experience.
