@@ -187,4 +187,9 @@ jobs:
         
         # Display all running containers
         docker-compose ps
+        
+        echo "==== Running migrations directly as a safeguard ===="
+        docker-compose exec -T web bash -c "cd /app/project && python manage.py makemigrations app"
+        docker-compose exec -T web bash -c "cd /app/project && python manage.py migrate app --noinput"
+        docker-compose exec -T web bash -c "cd /app/project && python manage.py showmigrations"
         EOSSH
