@@ -19,28 +19,148 @@ jobs:
         echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
         chmod 600 ~/.ssh/id_rsa
 
-    - name: Deploy on VPS
+    - name: Deploy and fix issues on VPS
       run: |
-        ssh -o StrictHostKeyChecking=no ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} << EOF
+        ssh -o StrictHostKeyChecking=no ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} << 'EOSSH'
         cd /home/ubuntu/django-app/devops-oracle
         
-        # Create backup directory if it doesn't exist
-        mkdir -p db_backups
+        echo "==== Backing up current files ===="
+        cp docker-compose.yml docker-compose.yml.bak || echo "Backup failed but continuing"
+        cp Dockerfile Dockerfile.bak || echo "Backup failed but continuing"
         
-        # Backup the database before doing anything
-        docker-compose exec -T db bash -c "PGPASSWORD=\$POSTGRES_PASSWORD pg_dump -U \$POSTGRES_USER \$POSTGRES_DB" > ~/db_backup_before_deploy_\$(date +%Y%m%d_%H%M%S).sql
+        echo "==== Pulling latest code ===="
+        git reset --hard origin/main
+        git pull origin main
         
-        # Pull the latest code
-        git reset --hard origin/main && git pull origin main
+        echo "==== Updating docker-compose.yml to remove command override ===="
+        cat > docker-compose.yml << 'EOC'
+        version: '3.8'
         
-        # Build and restart the web container
+        services:
+          web:
+            build: .
+            ports:
+              - "80:80"
+            env_file:
+              - .env.prod
+            volumes:
+              - ./media:/app/media
+              - ./logs:/app/logs
+              - ./static:/app/project/staticfiles
+            depends_on:
+              - db
+            restart: always
+            # No command override - will use CMD from Dockerfile
+          
+          db:
+            image: postgres:15
+            env_file:
+              - .env.prod
+            volumes:
+              - postgres_data:/var/lib/postgresql/data
+            restart: always
+            logging:
+              options:
+                max-size: "10m"
+                max-file: "3"
+        
+          cron:
+            build:
+              context: .
+              dockerfile: Dockerfile.cron
+            volumes:
+              - ./media:/app/media
+              - backup-volume:/backups
+              - rclone-config:/root/.config/rclone
+            env_file:
+              - .env.prod
+            depends_on:
+              - db
+            restart: always
+        
+        volumes:
+          postgres_data:
+            external: true  # This makes Docker use an existing volume and never create a new one
+          backup-volume:
+          rclone-config:
+        EOC
+        
+        echo "==== Updating Dockerfile with reliable migration sequence ===="
+        cat > Dockerfile << 'EOD'
+        # Use official Python image
+        FROM python:3.12.4-slim
+        
+        # Environment variables
+        ENV PYTHONDONTWRITEBYTECODE 1
+        ENV PYTHONUNBUFFERED 1
+        
+        # Set the working directory inside the container
+        WORKDIR /app
+        
+        # Install system dependencies for Python
+        RUN apt-get update && apt-get install -y --no-install-recommends gcc libpq-dev postgresql-client
+        
+        # Install Python dependencies
+        COPY requirements.txt /app/
+        RUN pip install --no-cache-dir -r requirements.txt
+        
+        # Copy wait-for-it script
+        COPY wait-for-it.sh /wait-for-it.sh
+        RUN chmod +x /wait-for-it.sh
+        
+        # Copy entire repository into the container
+        COPY . /app/
+        
+        # Set up volume for logs and backups
+        VOLUME /app/logs
+        VOLUME /app/db_backups
+        
+        # Collect static files
+        WORKDIR /app/project
+        RUN python manage.py collectstatic --noinput
+        
+        # Expose port 80
+        EXPOSE 80
+        
+        # Create and configure startup script
+        RUN echo '#!/bin/bash' > /app/start.sh && \
+            echo 'set -e' >> /app/start.sh && \
+            echo '' >> /app/start.sh && \
+            echo 'echo "Waiting for database..."' >> /app/start.sh && \
+            echo '/wait-for-it.sh db:5432 -t 60' >> /app/start.sh && \
+            echo '' >> /app/start.sh && \
+            echo 'cd /app/project' >> /app/start.sh && \
+            echo '' >> /app/start.sh && \
+            echo '# Apply migrations' >> /app/start.sh && \
+            echo 'echo "Running migrations..."' >> /app/start.sh && \
+            echo 'python manage.py migrate --noinput' >> /app/start.sh && \
+            echo '' >> /app/start.sh && \
+            echo '# Start gunicorn' >> /app/start.sh && \
+            echo 'echo "Starting gunicorn..."' >> /app/start.sh && \
+            echo 'gunicorn project.wsgi:application --bind 0.0.0.0:80' >> /app/start.sh && \
+            chmod +x /app/start.sh
+        
+        # Set the script as the command to run
+        CMD ["/app/start.sh"]
+        EOD
+        
+        echo "==== Rebuilding and restarting containers ===="
+        docker-compose down web
         docker-compose build web
-        docker-compose up -d --no-deps web
+        docker-compose up -d web
         
-        # Verify containers are running
+        echo "==== Checking logs (will wait 10 seconds for startup) ===="
+        sleep 10
+        docker-compose logs --tail=50 web
+        
+        echo "==== Creating admin user if needed ===="
+        docker-compose exec -T web python /app/project/manage.py shell -c "from django.contrib.auth import get_user_model; User = get_user_model(); User.objects.create_superuser('admin', 'admin@example.com', 'adminpassword') if not User.objects.filter(username='admin').exists() else print('Admin user already exists')"
+        
+        echo "==== Deployment complete ===="
+        echo "An admin user has been created with:"
+        echo "Username: admin"
+        echo "Password: adminpassword"
+        echo "Please change this password immediately after logging in!"
+        
         docker-compose ps
-        
-        # Check logs for any migration errors (last 30 lines)
-        echo "Checking logs for any migration issues..."
-        docker-compose logs --tail=30 web
-        EOF
+        EOSSH
