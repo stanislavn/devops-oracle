@@ -27,6 +27,29 @@ jobs:
         echo "==== Creating PostgreSQL volume if it doesn't exist ===="
         docker volume create postgres_data || echo "Volume already exists or creation failed"
         
+        echo "==== Check current database volume ===="
+        DB_CONTAINER=$(docker ps --filter "name=db" --format "{{.Names}}" | head -n 1)
+        if [ -n "$DB_CONTAINER" ]; then
+          CURRENT_VOLUME=$(docker inspect $DB_CONTAINER -f '{{ range .Mounts }}{{ if eq .Destination "/var/lib/postgresql/data" }}{{ .Name }}{{ end }}{{ end }}')
+          echo "Current database volume: $CURRENT_VOLUME"
+          
+          # If volume isn't already postgres_data, migrate the data
+          if [ "$CURRENT_VOLUME" != "postgres_data" ] && [ -n "$CURRENT_VOLUME" ]; then
+            echo "WARNING: Database is using volume $CURRENT_VOLUME instead of postgres_data!"
+            echo "Will migrate data to postgres_data volume..."
+            
+            # Backup current database
+            echo "Creating a backup of current database..."
+            docker exec $DB_CONTAINER bash -c "PGPASSWORD=\$POSTGRES_PASSWORD pg_dump -U \$POSTGRES_USER \$POSTGRES_DB" > ~/db_backup_before_migration_$(date +%Y%m%d_%H%M%S).sql
+            
+            # Copy data between volumes
+            echo "Copying data between volumes (this may take a while)..."
+            docker run --rm -v $CURRENT_VOLUME:/source -v postgres_data:/target alpine sh -c "cp -av /source/. /target/"
+            
+            echo "Data migration complete"
+          fi
+        fi
+        
         echo "==== Backing up current files ===="
         cp docker-compose.yml docker-compose.yml.bak || echo "Backup failed but continuing"
         cp Dockerfile Dockerfile.bak || echo "Backup failed but continuing"
@@ -35,7 +58,7 @@ jobs:
         git reset --hard origin/main
         git pull origin main
         
-        echo "==== Updating docker-compose.yml to remove command override ===="
+        echo "==== Updating docker-compose.yml for consistent volume usage ===="
         cat > docker-compose.yml << 'EOC'
         version: '3.8'
         
@@ -53,7 +76,6 @@ jobs:
             depends_on:
               - db
             restart: always
-            # No command override - will use CMD from Dockerfile
           
           db:
             image: postgres:15
@@ -83,9 +105,12 @@ jobs:
         
         volumes:
           postgres_data:
-            external: true  # This makes Docker use an existing volume and never create a new one
+            name: postgres_data  # Force exact name to ensure consistency
+            external: true
           backup-volume:
+            name: backup-volume
           rclone-config:
+            name: rclone-config
         EOC
         
         echo "==== Updating Django settings to fix DisallowedHost errors ===="
@@ -104,75 +129,95 @@ jobs:
           sed -i '1s/^/ALLOWED_HOSTS = ["*"]\n\n/' "$SETTINGS_FILE"
         fi
         
-        echo "==== Updating Dockerfile with reliable migration sequence ===="
+        echo "==== Updating Dockerfile with reliable migration and admin user creation ===="
         cat > Dockerfile << 'EOD'
         # Use official Python image
         FROM python:3.12.4-slim
-        
+
         # Environment variables
         ENV PYTHONDONTWRITEBYTECODE 1
         ENV PYTHONUNBUFFERED 1
-        
+
         # Set the working directory inside the container
         WORKDIR /app
-        
+
         # Install system dependencies for Python
         RUN apt-get update && apt-get install -y --no-install-recommends gcc libpq-dev postgresql-client
-        
+
         # Install Python dependencies
         COPY requirements.txt /app/
         RUN pip install --no-cache-dir -r requirements.txt
-        
+
         # Copy wait-for-it script
         COPY wait-for-it.sh /wait-for-it.sh
         RUN chmod +x /wait-for-it.sh
-        
+
         # Copy entire repository into the container
         COPY . /app/
-        
+
         # Set up volume for logs and backups
         VOLUME /app/logs
         VOLUME /app/db_backups
-        
+
         # Collect static files
         WORKDIR /app/project
         RUN python manage.py collectstatic --noinput
-        
+
         # Expose port 80
         EXPOSE 80
-        
-        # Create and configure startup script
-        RUN echo '#!/bin/bash' > /app/start.sh && \
-            echo 'set -e' >> /app/start.sh && \
-            echo '' >> /app/start.sh && \
-            echo 'echo "Waiting for database..."' >> /app/start.sh && \
-            echo '/wait-for-it.sh db:5432 -t 60' >> /app/start.sh && \
-            echo '' >> /app/start.sh && \
-            echo 'cd /app/project' >> /app/start.sh && \
-            echo '' >> /app/start.sh && \
-            echo '# Apply migrations' >> /app/start.sh && \
-            echo 'echo "Running migrations..."' >> /app/start.sh && \
-            echo 'python manage.py migrate --noinput' >> /app/start.sh && \
-            echo '' >> /app/start.sh && \
-            echo '# Start gunicorn' >> /app/start.sh && \
-            echo 'echo "Starting gunicorn..."' >> /app/start.sh && \
-            echo 'gunicorn project.wsgi:application --bind 0.0.0.0:80 --timeout 120' >> /app/start.sh && \
+
+        # Create a directory for database backups
+        RUN mkdir -p /app/db_backups
+
+        # Create more robust start script with migration verification
+        RUN echo '#!/bin/bash' > /app/start.sh && \\
+            echo 'set -e' >> /app/start.sh && \\
+            echo '' >> /app/start.sh && \\
+            echo 'echo "Waiting for database..."' >> /app/start.sh && \\
+            echo '/wait-for-it.sh db:5432 -t 60' >> /app/start.sh && \\
+            echo '' >> /app/start.sh && \\
+            echo 'cd /app/project' >> /app/start.sh && \\
+            echo '' >> /app/start.sh && \\
+            echo 'echo "Listing available migrations before running..."' >> /app/start.sh && \\
+            echo 'python manage.py showmigrations' >> /app/start.sh && \\
+            echo '' >> /app/start.sh && \\
+            echo '# Apply migrations with verbose output' >> /app/start.sh && \\
+            echo 'echo "Running migrations with verbosity..."' >> /app/start.sh && \\
+            echo 'python manage.py migrate --noinput -v 2' >> /app/start.sh && \\
+            echo '' >> /app/start.sh && \\
+            echo 'echo "Verifying migrations were applied..."' >> /app/start.sh && \\
+            echo 'python manage.py showmigrations' >> /app/start.sh && \\
+            echo '' >> /app/start.sh && \\
+            echo '# Create admin user if none exists' >> /app/start.sh && \\
+            echo 'echo "Ensuring admin user exists..."' >> /app/start.sh && \\
+            echo 'python manage.py shell -c "from django.contrib.auth import get_user_model; User = get_user_model(); User.objects.create_superuser(\\"admin\\", \\"admin@example.com\\", \\"adminpassword\\") if not User.objects.filter(username=\\"admin\\").exists() else print(\\"Admin user already exists\\")"' >> /app/start.sh && \\
+            echo '' >> /app/start.sh && \\
+            echo '# Start gunicorn with longer timeout' >> /app/start.sh && \\
+            echo 'echo "Starting gunicorn..."' >> /app/start.sh && \\
+            echo 'gunicorn project.wsgi:application --bind 0.0.0.0:80 --timeout 120' >> /app/start.sh && \\
             chmod +x /app/start.sh
-        
+
         # Set the script as the command to run
         CMD ["/app/start.sh"]
         EOD
         
         echo "==== Rebuilding and restarting containers ===="
-        docker-compose down web
+        # First stop just the web container
+        docker-compose stop web
+        docker-compose rm -f web
+        
+        # Build and start web container
         docker-compose build web
         docker-compose up -d web
         
-        echo "==== Checking logs (will wait 10 seconds for startup) ===="
-        sleep 10
+        echo "==== Checking logs (will wait 15 seconds for startup) ===="
+        sleep 15
         docker-compose logs --tail=50 web
         
-        echo "==== Creating admin user if needed ===="
+        echo "==== Manually running migrations as a safeguard ===="
+        docker-compose exec -T web bash -c "cd /app/project && python manage.py migrate --noinput -v 3"
+        
+        echo "==== Manually creating admin user if needed ===="
         docker-compose exec -T web python /app/project/manage.py shell -c "from django.contrib.auth import get_user_model; User = get_user_model(); User.objects.create_superuser('admin', 'admin@example.com', 'adminpassword') if not User.objects.filter(username='admin').exists() else print('Admin user already exists')"
         
         echo "==== Deployment complete ===="
@@ -181,15 +226,6 @@ jobs:
         echo "Password: adminpassword"
         echo "Please change this password immediately after logging in!"
         
-        # Verify database connection
-        echo "==== Verifying database connection ===="
-        docker-compose exec -T web python /app/project/manage.py dbshell --command="SELECT 1;" || echo "Database verification failed, but container is running"
-        
         # Display all running containers
         docker-compose ps
-        
-        echo "==== Running migrations directly as a safeguard ===="
-        docker-compose exec -T web bash -c "cd /app/project && python manage.py makemigrations app"
-        docker-compose exec -T web bash -c "cd /app/project && python manage.py migrate app --noinput"
-        docker-compose exec -T web bash -c "cd /app/project && python manage.py showmigrations"
         EOSSH

@@ -30,62 +30,43 @@ COPY . /app/
 VOLUME /app/logs
 VOLUME /app/db_backups
 
-# Create a directory for database backups
-RUN mkdir -p /app/db_backups
+# Collect static files
+WORKDIR /app/project
+RUN python manage.py collectstatic --noinput
 
 # Expose port 80
 EXPOSE 80
 
-# Start script with proper error handling and logging
-COPY <<'EOF' /app/start.sh
-#!/bin/bash
-set -e
+# Create a directory for database backups
+RUN mkdir -p /app/db_backups
 
-# Wait for database
-/wait-for-it.sh db:5432 -t 60
+# Create more robust start script with migration verification
+RUN echo '#!/bin/bash' > /app/start.sh && \
+    echo 'set -e' >> /app/start.sh && \
+    echo '' >> /app/start.sh && \
+    echo 'echo "Waiting for database..."' >> /app/start.sh && \
+    echo '/wait-for-it.sh db:5432 -t 60' >> /app/start.sh && \
+    echo '' >> /app/start.sh && \
+    echo 'cd /app/project' >> /app/start.sh && \
+    echo '' >> /app/start.sh && \
+    echo 'echo "Listing available migrations before running..."' >> /app/start.sh && \
+    echo 'python manage.py showmigrations' >> /app/start.sh && \
+    echo '' >> /app/start.sh && \
+    echo '# Apply migrations with verbose output' >> /app/start.sh && \
+    echo 'echo "Running migrations with verbosity..."' >> /app/start.sh && \
+    echo 'python manage.py migrate --noinput -v 2' >> /app/start.sh && \
+    echo '' >> /app/start.sh && \
+    echo 'echo "Verifying migrations were applied..."' >> /app/start.sh && \
+    echo 'python manage.py showmigrations' >> /app/start.sh && \
+    echo '' >> /app/start.sh && \
+    echo '# Create admin user if none exists' >> /app/start.sh && \
+    echo 'echo "Ensuring admin user exists..."' >> /app/start.sh && \
+    echo 'python manage.py shell -c "from django.contrib.auth import get_user_model; User = get_user_model(); User.objects.create_superuser(\"admin\", \"admin@example.com\", \"adminpassword\") if not User.objects.filter(username=\"admin\").exists() else print(\"Admin user already exists\")"' >> /app/start.sh && \
+    echo '' >> /app/start.sh && \
+    echo '# Start gunicorn with longer timeout' >> /app/start.sh && \
+    echo 'echo "Starting gunicorn..."' >> /app/start.sh && \
+    echo 'gunicorn project.wsgi:application --bind 0.0.0.0:80 --timeout 120' >> /app/start.sh && \
+    chmod +x /app/start.sh
 
-# Navigate to project directory
-cd /app/project
-
-# Create database backup before applying migrations
-echo "$(date): Creating database backup before migrations..."
-BACKUP_FILE="/app/db_backups/pre_migration_backup_$(date +%Y%m%d_%H%M%S).sql"
-PGPASSWORD=$POSTGRES_PASSWORD pg_dump -h db -U $POSTGRES_USER $POSTGRES_DB > "$BACKUP_FILE" || echo "Warning: Backup failed but continuing..."
-
-# Run migrations with proper error handling
-echo "$(date): Running migrations..."
-
-# Only run makemigrations in development, not in production
-if [ "$DEBUG" = "True" ]; then
-  echo "$(date): Running makemigrations (development mode)..."
-  python manage.py makemigrations
-else
-  echo "$(date): Skipping makemigrations in production mode..."
-fi
-
-# Always run migrate
-python manage.py migrate --noinput || {
-    echo "$(date): Migration failed! Restoring from backup..."
-    if [ -f "$BACKUP_FILE" ] && [ -s "$BACKUP_FILE" ]; then
-        PGPASSWORD=$POSTGRES_PASSWORD psql -h db -U $POSTGRES_USER $POSTGRES_DB < "$BACKUP_FILE"
-        echo "$(date): Restored from backup"
-    else
-        echo "$(date): No valid backup found to restore from!"
-    fi
-    exit 1
-}
-
-# Collect static files
-echo "$(date): Collecting static files..."
-python manage.py collectstatic --noinput
-
-# Start gunicorn
-echo "$(date): Starting application server..."
-exec gunicorn project.wsgi:application --bind 0.0.0.0:80
-EOF
-
-# Make script executable
-RUN chmod +x /app/start.sh
-
-# Start the application using our start script
+# Set the script as the command to run
 CMD ["/app/start.sh"]
