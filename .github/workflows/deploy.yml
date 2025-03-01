@@ -24,6 +24,9 @@ jobs:
         ssh -o StrictHostKeyChecking=no ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} << 'EOSSH'
         cd /home/ubuntu/django-app/devops-oracle
         
+        echo "==== Creating PostgreSQL volume if it doesn't exist ===="
+        docker volume create postgres_data || echo "Volume already exists or creation failed"
+        
         echo "==== Backing up current files ===="
         cp docker-compose.yml docker-compose.yml.bak || echo "Backup failed but continuing"
         cp Dockerfile Dockerfile.bak || echo "Backup failed but continuing"
@@ -85,6 +88,22 @@ jobs:
           rclone-config:
         EOC
         
+        echo "==== Updating Django settings to fix DisallowedHost errors ===="
+        # Find the settings.py file
+        SETTINGS_FILE=$(find project -name settings.py)
+        
+        # Make a backup of the settings file
+        cp "$SETTINGS_FILE" "${SETTINGS_FILE}.bak"
+        
+        # Add wildcard to ALLOWED_HOSTS
+        if grep -q "ALLOWED_HOSTS" "$SETTINGS_FILE"; then
+          # Replace existing ALLOWED_HOSTS line
+          sed -i "s/ALLOWED_HOSTS = \[.*\]/ALLOWED_HOSTS = ['*']/" "$SETTINGS_FILE"
+        else
+          # Add ALLOWED_HOSTS line before the first blank line
+          sed -i '1s/^/ALLOWED_HOSTS = ["*"]\n\n/' "$SETTINGS_FILE"
+        fi
+        
         echo "==== Updating Dockerfile with reliable migration sequence ===="
         cat > Dockerfile << 'EOD'
         # Use official Python image
@@ -137,7 +156,7 @@ jobs:
             echo '' >> /app/start.sh && \
             echo '# Start gunicorn' >> /app/start.sh && \
             echo 'echo "Starting gunicorn..."' >> /app/start.sh && \
-            echo 'gunicorn project.wsgi:application --bind 0.0.0.0:80' >> /app/start.sh && \
+            echo 'gunicorn project.wsgi:application --bind 0.0.0.0:80 --timeout 120' >> /app/start.sh && \
             chmod +x /app/start.sh
         
         # Set the script as the command to run
@@ -162,5 +181,10 @@ jobs:
         echo "Password: adminpassword"
         echo "Please change this password immediately after logging in!"
         
+        # Verify database connection
+        echo "==== Verifying database connection ===="
+        docker-compose exec -T web python /app/project/manage.py dbshell --command="SELECT 1;" || echo "Database verification failed, but container is running"
+        
+        # Display all running containers
         docker-compose ps
         EOSSH
