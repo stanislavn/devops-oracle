@@ -36,15 +36,23 @@ jobs:
           # Create backup directory if it doesn't exist
           mkdir -p ~/db_backups
           
-          # Backup current database
-          BACKUP_FILE=~/db_backups/db_backup_before_deploy_$(date +%Y%m%d_%H%M%S).sql
-          echo "Creating database backup to $BACKUP_FILE"
-          docker exec $DB_CONTAINER pg_dump -U postgres -d postgres > $BACKUP_FILE
-          
-          if [ -s "$BACKUP_FILE" ]; then
-            echo "Backup created successfully ($(wc -l < $BACKUP_FILE) lines)"
+          # Get database credentials from env file
+          if [ -f .env.prod ]; then
+            echo "Loading database credentials from .env.prod"
+            source <(grep -v '^#' .env.prod | sed -E 's/(.*)=(.*)/export \1="\2"/')
+            
+            # Backup current database using credentials from env file
+            BACKUP_FILE=~/db_backups/db_backup_before_deploy_$(date +%Y%m%d_%H%M%S).sql
+            echo "Creating database backup to $BACKUP_FILE"
+            docker exec $DB_CONTAINER bash -c "PGPASSWORD=\"$POSTGRES_PASSWORD\" pg_dump -U \"$POSTGRES_USER\" \"$POSTGRES_DB\"" > $BACKUP_FILE
+            
+            if [ -s "$BACKUP_FILE" ]; then
+              echo "Backup created successfully ($(wc -l < $BACKUP_FILE) lines)"
+            else
+              echo "WARNING: Backup file is empty or failed!"
+            fi
           else
-            echo "WARNING: Backup file is empty or failed!"
+            echo "WARNING: .env.prod file not found, skipping database backup"
           fi
         else
           echo "No database container found to backup"
@@ -74,10 +82,11 @@ jobs:
         
         # Rebuild and restart all services
         echo "==== Rebuilding and restarting all containers ===="
-        docker-compose up -d --build
+        docker-compose build --no-cache web
+        docker-compose up -d
         
-        echo "==== Checking logs (will wait 30 seconds for startup) ===="
-        sleep 30
+        echo "==== Checking logs (will wait 60 seconds for startup) ===="
+        sleep 60
         docker-compose logs --tail=100 web
         
         echo "==== Testing database connection and migrations status ===="

@@ -31,46 +31,42 @@ VOLUME /app/db_backups
 RUN mkdir -p /app/db_backups
 
 # Create startup script with proper migration handling
-RUN cat > /app/start.sh << 'EOF'
-#!/bin/bash
-set -e
-
-echo "Waiting for database..."
-# Check if the database is ready
-until nc -z -v -w30 db 5432; do
-  echo "Waiting for database connection..."
-  sleep 5
-done
-
-cd /app/project
-
-echo "Listing available migrations before running..."
-python manage.py showmigrations
-
-echo "Making migrations for all apps..."
-python manage.py makemigrations --noinput
-
-echo "Running migrations with verbosity..."
-python manage.py migrate --noinput -v 2
-
-echo "Verifying migrations were applied..."
-python manage.py showmigrations
-
-echo "Registering management commands..."
-python manage.py register_commands
-
-echo "Ensuring admin user exists..."
-python manage.py shell -c "from django.contrib.auth import get_user_model; User = get_user_model(); User.objects.create_superuser('admin', 'admin@example.com', 'adminpassword') if not User.objects.filter(username='admin').exists() else print('Admin user already exists')"
-
-echo "Collecting static files..."
-python manage.py collectstatic --noinput
-
-echo "Starting gunicorn..."
-gunicorn project.wsgi:application --bind 0.0.0.0:80 --timeout 120
-EOF
-
-# Make the startup script executable
-RUN chmod +x /app/start.sh
+RUN echo '#!/bin/bash' > /app/start.sh && \
+    echo 'set -e' >> /app/start.sh && \
+    echo '' >> /app/start.sh && \
+    echo 'echo "Waiting for database..."' >> /app/start.sh && \
+    echo '# Check if the database is ready' >> /app/start.sh && \
+    echo 'until nc -z -v -w30 db 5432; do' >> /app/start.sh && \
+    echo '  echo "Waiting for database connection..."' >> /app/start.sh && \
+    echo '  sleep 5' >> /app/start.sh && \
+    echo 'done' >> /app/start.sh && \
+    echo '' >> /app/start.sh && \
+    echo 'cd /app/project' >> /app/start.sh && \
+    echo '' >> /app/start.sh && \
+    echo 'echo "Listing available migrations before running..."' >> /app/start.sh && \
+    echo 'python manage.py showmigrations' >> /app/start.sh && \
+    echo '' >> /app/start.sh && \
+    echo 'echo "Making migrations for all apps..."' >> /app/start.sh && \
+    echo 'python manage.py makemigrations --noinput' >> /app/start.sh && \
+    echo '' >> /app/start.sh && \
+    echo 'echo "Running migrations with verbosity..."' >> /app/start.sh && \
+    echo 'python manage.py migrate --noinput -v 2' >> /app/start.sh && \
+    echo '' >> /app/start.sh && \
+    echo 'echo "Verifying migrations were applied..."' >> /app/start.sh && \
+    echo 'python manage.py showmigrations' >> /app/start.sh && \
+    echo '' >> /app/start.sh && \
+    echo 'echo "Registering management commands..."' >> /app/start.sh && \
+    echo 'python manage.py register_commands' >> /app/start.sh && \
+    echo '' >> /app/start.sh && \
+    echo 'echo "Ensuring admin user exists..."' >> /app/start.sh && \
+    echo 'python manage.py shell -c "from django.contrib.auth import get_user_model; User = get_user_model(); User.objects.create_superuser(\"admin\", \"admin@example.com\", \"adminpassword\") if not User.objects.filter(username=\"admin\").exists() else print(\"Admin user already exists\")"' >> /app/start.sh && \
+    echo '' >> /app/start.sh && \
+    echo 'echo "Collecting static files..."' >> /app/start.sh && \
+    echo 'python manage.py collectstatic --noinput' >> /app/start.sh && \
+    echo '' >> /app/start.sh && \
+    echo 'echo "Starting gunicorn..."' >> /app/start.sh && \
+    echo 'gunicorn project.wsgi:application --bind 0.0.0.0:80 --timeout 120' >> /app/start.sh && \
+    chmod +x /app/start.sh
 
 # Expose port 80
 EXPOSE 80
