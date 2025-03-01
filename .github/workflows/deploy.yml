@@ -28,7 +28,7 @@ jobs:
         mkdir -p db_backups
         
         # Backup the database before doing anything
-        docker-compose exec -T db bash -c "PGPASSWORD=\$POSTGRES_PASSWORD pg_dump -U \$POSTGRES_USER \$POSTGRES_DB" > db_backups/db_backup_before_deploy_\$(date +%Y%m%d_%H%M%S).sql
+        docker-compose exec -T db bash -c "PGPASSWORD=\$POSTGRES_PASSWORD pg_dump -U \$POSTGRES_USER \$POSTGRES_DB" > ~/db_backup_before_deploy_\$(date +%Y%m%d_%H%M%S).sql
         
         # Pull the latest code
         git reset --hard origin/main && git pull origin main
