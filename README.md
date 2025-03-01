@@ -107,3 +107,38 @@ docker-compose build && docker-compose up -d --force-recreate
 ## Access docker container
 
 docker-compose exec web bash
+
+## Initial Setup
+
+Before running the application for the first time:
+
+1. Create the named volume for the database:
+   ```bash
+   # Run the initialize script
+   chmod +x init-volume.sh
+   ./init-volume.sh
+   ```
+
+2. Start the application:
+   ```bash
+   docker-compose up -d
+   ```
+
+3. Create a superuser (first time only):
+   ```bash
+   docker-compose exec web bash -c "cd /app/project && python manage.py createsuperuser"
+   ```
+
+## After Deployment
+
+After each deployment:
+
+1. Check logs for successful migrations:
+   ```bash
+   docker-compose logs web
+   ```
+
+2. If needed, manually create a superuser:
+   ```bash
+   docker-compose exec web bash -c "cd /app/project && python manage.py createsuperuser"
+   ```

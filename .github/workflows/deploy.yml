@@ -23,16 +23,24 @@ jobs:
       run: |
         ssh -o StrictHostKeyChecking=no ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} << EOF
         cd /home/ubuntu/django-app/devops-oracle
+        
+        # Create backup directory if it doesn't exist
+        mkdir -p db_backups
+        
+        # Backup the database before doing anything
+        docker-compose exec -T db bash -c "PGPASSWORD=\$POSTGRES_PASSWORD pg_dump -U \$POSTGRES_USER \$POSTGRES_DB" > db_backups/db_backup_before_deploy_\$(date +%Y%m%d_%H%M%S).sql
+        
+        # Pull the latest code
         git reset --hard origin/main && git pull origin main
         
-        # Stop only the web container, leaving db untouched
-        docker-compose stop web
-        docker-compose rm -f web
-        
-        # Rebuild and start only the web container
+        # Build and restart the web container
         docker-compose build web
-        docker-compose up -d
+        docker-compose up -d --no-deps web
         
         # Verify containers are running
         docker-compose ps
+        
+        # Check logs for any migration errors (last 30 lines)
+        echo "Checking logs for any migration issues..."
+        docker-compose logs --tail=30 web
         EOF

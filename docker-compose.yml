@@ -11,6 +11,7 @@ services:
       - ./media:/app/media
       - ./logs:/app/logs
       - ./static:/app/project/staticfiles
+      - ./db_backups:/app/db_backups
     depends_on:
       - db
     restart: always
@@ -20,7 +21,7 @@ services:
     env_file:
       - .env.prod
     volumes:
-      - django_postgres_data:/var/lib/postgresql/data
+      - postgres_data:/var/lib/postgresql/data
     restart: always
     logging:
       options:
@@ -42,9 +43,7 @@ services:
     restart: always
 
 volumes:
-  django_postgres_data:
+  postgres_data:
     name: django_postgres_data
   backup-volume:
-    name: django_backup_volume
   rclone-config:
-    name: django_rclone_config
