@@ -1,0 +1,30 @@
+{% extends "admin/base_site.html" %}
+{% load static %}
+
+{% block content %}
+<div class="container">
+    <h2>Run Management Command as Task</h2>
+    <div class="card">
+        <div class="card-body">
+            <form method="post">
+                {% csrf_token %}
+                <div class="form-group">
+                    <label for="command">Select Command:</label>
+                    <select name="command" id="command" class="form-control">
+                        {% for cmd in available_commands %}
+                            <option value="{{ cmd }}">{{ cmd }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <button type="submit" class="btn btn-primary mt-3">Run Command</button>
+            </form>
+        </div>
+    </div>
+    
+    <div class="mt-4">
+        <h3>About this feature</h3>
+        <p>This tool allows you to run Django management commands as asynchronous Celery tasks. The command will run in the background without blocking the web interface.</p>
+        <p>To schedule recurring tasks, use the <a href="{% url 'admin:django_celery_beat_periodictask_changelist' %}">Django Celery Beat</a> interface.</p>
+    </div>
+</div>
+{% endblock %} 

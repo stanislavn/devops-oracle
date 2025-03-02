@@ -10,6 +10,9 @@ from django.template.response import TemplateResponse
 from django.views.decorators.csrf import csrf_protect
 from django.utils.decorators import method_decorator
 from .models import DummyModel, ManagementCommand
+from django.http import HttpResponseRedirect
+from django_celery_beat.models import PeriodicTask, IntervalSchedule, CrontabSchedule
+from .tasks import run_management_command
 
 
 class DummyModelAdmin(admin.ModelAdmin):
@@ -119,3 +122,102 @@ class ManagementCommandAdmin(admin.ModelAdmin):
 
 
 admin.site.register(DummyModel, DummyModelAdmin)
+
+
+class TaskAdmin(admin.ModelAdmin):
+    """
+    Custom admin view for running management commands as Celery tasks
+    """
+
+    change_list_template = "admin/task_changelist.html"
+
+    def get_urls(self):
+        urls = super().get_urls()
+        custom_urls = [
+            path("run_task/", self.run_task_view, name="run_task"),
+        ]
+        return custom_urls + urls
+
+    def run_task_view(self, request):
+        """View to run a task manually"""
+        available_commands = [
+            "clearsessions",
+            "cleanup_logs",
+            "collectstatic",
+            # Add more commands as needed
+        ]
+
+        if request.method == "POST":
+            command = request.POST.get("command")
+            args = request.POST.get("args", "").split()
+            kwargs = {}
+
+            # Parse kwargs from form
+            for key, value in request.POST.items():
+                if key.startswith("kwarg_"):
+                    kwargs[key[6:]] = value
+
+            if command in available_commands:
+                # Run the task asynchronously
+                task = run_management_command.delay(command, *args, **kwargs)
+                messages.success(
+                    request,
+                    f"Task {command} started with task ID: {task.id}. Check results in the Django Celery Results admin.",
+                )
+            else:
+                messages.error(request, f"Invalid command: {command}")
+
+            return HttpResponseRedirect("../")
+
+        # GET request - show the form
+        context = {
+            "available_commands": available_commands,
+        }
+        return render(request, "admin/run_task.html", context)
+
+
+# Create a dummy model admin to attach our custom view
+class TaskRunnerAdmin(admin.ModelAdmin):
+    model = DummyModel
+
+    def get_urls(self):
+        urls = super().get_urls()
+        custom_urls = [
+            path(
+                "run-command/",
+                self.admin_site.admin_view(self.run_command_view),
+                name="run_command",
+            ),
+        ]
+        return custom_urls + urls
+
+    def run_command_view(self, request):
+        available_commands = [
+            "clearsessions",
+            "cleanup_logs",
+            "collectstatic",
+            # Add more commands as needed
+        ]
+
+        if request.method == "POST":
+            command = request.POST.get("command")
+            if command in available_commands:
+                # Run the task asynchronously
+                task = run_management_command.delay(command)
+                messages.success(
+                    request, f"Task {command} started with task ID: {task.id}"
+                )
+            else:
+                messages.error(request, f"Invalid command: {command}")
+
+            return HttpResponseRedirect("../")
+
+        # GET request - show the form
+        context = {
+            "available_commands": available_commands,
+        }
+        return render(request, "admin/run_command.html", context)
+
+
+# Register with the custom view
+admin.site.register(DummyModel, TaskRunnerAdmin)

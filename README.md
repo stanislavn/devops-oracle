@@ -114,6 +114,74 @@ Regular backups are performed via:
 3. **Remote Storage**: Backups are sent to Nextcloud via rclone
 4. **Retention Policy**: Automatic cleanup of backups older than 7 days
 
+## Celery Task Management
+
+This project uses Celery with Redis for running asynchronous tasks and scheduled jobs, providing a powerful way to execute Django management commands in the background.
+
+### Task System Architecture
+
+1. **Components**:
+   - **Celery Worker**: Processes tasks asynchronously 
+   - **Celery Beat**: Schedules periodic tasks
+   - **Redis**: Used as the message broker
+   - **Django Admin Interface**: Configure and monitor tasks
+
+2. **Benefits**:
+   - Run long-running tasks without blocking web requests
+   - Schedule tasks to run at specific times
+   - Monitor task execution and results
+   - Retry failed tasks automatically
+
+### Running Management Commands as Tasks
+
+There are two ways to run management commands as tasks:
+
+1. **Via Admin Interface**: 
+   - Navigate to `Admin > Dummy Models > Run Command`
+   - Select the command you want to run
+   - Click "Run Command" to execute it in the background
+
+2. **Programmatically**:
+   ```python
+   from app.tasks import run_management_command
+   
+   # Run a command asynchronously
+   task = run_management_command.delay('command_name', *args, **kwargs)
+   
+   # Get the task ID for later reference
+   task_id = task.id
+   ```
+
+### Scheduling Recurring Tasks
+
+Use Django Celery Beat to schedule recurring tasks:
+
+1. Navigate to `Admin > Periodic Tasks` in the Django Admin
+2. Create a new periodic task:
+   - Select a task (e.g., `app.tasks.cleanup_logs`)
+   - Configure the schedule (interval or crontab)
+   - Enable the task and save
+
+### Default Scheduled Tasks
+
+The following tasks are configured by default:
+
+1. **Session Cleanup**: Runs daily at midnight
+2. **Log Cleanup**: Runs weekly on Sundays at 1 AM
+3. **Database Backup**: Runs daily at 2 AM
+
+To set up these default tasks after deployment:
+```bash
+docker-compose exec web python manage.py setup_periodic_tasks
+```
+
+### Monitoring Tasks
+
+View task execution history and results:
+
+1. Navigate to `Admin > Task Results` in the Django Admin
+2. Review task status, results, and execution times
+
 ## Troubleshooting & Maintenance
 
 ### Checking Logs
@@ -164,6 +232,7 @@ docker-compose build && docker-compose up -d --force-recreate
 - ✅ Migrations are automatically created and applied
 - ✅ Backup system is functioning
 - ✅ Admin user is created automatically
+- ✅ Celery worker and beat services are running
 
 ## Backup and Restore
 
@@ -220,6 +289,11 @@ Before running the application for the first time:
    docker-compose exec web bash -c "cd /app/project && python manage.py createsuperuser"
    ```
 
+4. Set up default scheduled tasks:
+   ```bash
+   docker-compose exec web python manage.py setup_periodic_tasks
+   ```
+
 ## After Deployment
 
 After each deployment:
@@ -232,6 +306,12 @@ After each deployment:
 2. If needed, manually create a superuser:
    ```bash
    docker-compose exec web bash -c "cd /app/project && python manage.py createsuperuser"
+   ```
+
+3. Verify Celery workers are running:
+   ```bash
+   docker-compose logs celery-worker
+   docker-compose logs celery-beat
    ```
 
 By following this deployment guide, your Django application will maintain data persistence, apply migrations automatically, and provide a reliable user experience.
