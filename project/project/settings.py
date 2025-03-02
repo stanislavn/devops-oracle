@@ -51,6 +51,8 @@ INSTALLED_APPS = [
     "django.contrib.messages",
     "axes",
     "app",
+    "django_celery_beat",
+    "django_celery_results",
 ]
 
 MIDDLEWARE = [
@@ -338,3 +340,14 @@ CSRF_FAILURE_VIEW = "app.views.csrf_failure"
 
 SECURE_SSL_REDIRECT = False  # Don't redirect during testing
 CSRF_USE_SESSIONS = False  # Use default cookie-based tokens for now
+
+# Celery settings
+CELERY_BROKER_URL = os.getenv("CELERY_BROKER_URL", "redis://redis:6379/0")
+CELERY_RESULT_BACKEND = os.getenv("CELERY_RESULT_BACKEND", "django-db")
+CELERY_ACCEPT_CONTENT = ["json"]
+CELERY_TASK_SERIALIZER = "json"
+CELERY_RESULT_SERIALIZER = "json"
+CELERY_TIMEZONE = TIME_ZONE
+
+# Celery Beat settings
+CELERY_BEAT_SCHEDULER = "django_celery_beat.schedulers:DatabaseScheduler"

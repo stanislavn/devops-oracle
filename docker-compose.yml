@@ -8,44 +8,76 @@ services:
     env_file:
       - .env.prod
     volumes:
-      - ./media:/app/media
-      - ./logs:/app/logs
-      - ./static:/app/project/staticfiles
+      - ./:/app
+      - static_volume:/app/staticfiles
+      - media_volume:/app/media
     depends_on:
       - db
+      - redis
     restart: always
 
   db:
-    image: postgres:15
+    image: postgres:14
     env_file:
       - .env.prod
     volumes:
-      - postgres_data:/var/lib/postgresql/data
+      - postgres_data:/var/lib/postgresql/data/
     restart: always
     logging:
       options:
         max-size: "10m"
         max-file: "3"
 
-  cron:
-    build:
-      context: .
-      dockerfile: Dockerfile.cron
+  redis:
+    image: redis:7-alpine
+    restart: always
     volumes:
-      - ./media:/app/media
-      - backup-volume:/backups
-      - rclone-config:/root/.config/rclone
+      - redis_data:/data
+
+  celery-worker:
+    build: .
+    restart: always
+    command: celery -A project worker --loglevel=info
+    volumes:
+      - ./:/app
+      - static_volume:/app/staticfiles
+      - media_volume:/app/media
     env_file:
       - .env.prod
     depends_on:
+      - web
       - db
+      - redis
+
+  celery-beat:
+    build: .
     restart: always
+    command: celery -A project beat --scheduler django_celery_beat.schedulers:DatabaseScheduler --loglevel=info
+    volumes:
+      - ./:/app
+    env_file:
+      - .env.prod
+    depends_on:
+      - web
+      - db
+      - redis
+
+  nginx:
+    image: nginx:1.21-alpine
+    restart: always
+    volumes:
+      - static_volume:/app/staticfiles
+      - media_volume:/app/media
+      - ./nginx:/etc/nginx/conf.d
+    ports:
+      - "80:80"
+    depends_on:
+      - web
 
 volumes:
   postgres_data:
     name: postgres_data
     external: true
-  backup-volume:
-    name: backup-volume
-  rclone-config:
-    name: rclone-config
+  static_volume:
+  media_volume:
+  redis_data:
