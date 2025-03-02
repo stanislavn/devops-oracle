@@ -17,17 +17,20 @@ RUN apt-get update && apt-get install -y \
     libpq-dev \
     netcat-traditional \
     wait-for-it \
+    curl \
     && rm -rf /var/lib/apt/lists/*
 
 # Install Python dependencies
 COPY requirements.txt /app/
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy startup script first and ensure it has correct permissions
+# Copy startup script and make it executable (using two separate steps for clarity)
 COPY start.sh /app/
-# Make sure the script has unix line endings and is executable
-RUN sed -i 's/\r$//' /app/start.sh && \
-    chmod +x /app/start.sh
+# Force correct line endings and permissions
+RUN cat /app/start.sh | tr -d '\r' > /app/start.sh.unix && \
+    mv /app/start.sh.unix /app/start.sh && \
+    chmod 755 /app/start.sh && \
+    ls -la /app/start.sh
 
 # Copy entire repository into the container
 COPY . /app/
@@ -39,9 +42,11 @@ VOLUME /app/db_backups
 # Create a directory for database backups
 RUN mkdir -p /app/db_backups
 
-# Verify the script is executable (extra safety)
-RUN ls -la /app/start.sh && \
-    chmod 755 /app/start.sh
+# Make sure the script didn't lose its permissions after copying the repo
+RUN cat /app/start.sh | tr -d '\r' > /app/start.sh.unix && \
+    mv /app/start.sh.unix /app/start.sh && \
+    chmod 755 /app/start.sh && \
+    ls -la /app/start.sh
 
 # Expose port 80
 EXPOSE 80

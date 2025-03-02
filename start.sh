@@ -4,8 +4,19 @@ set -e
 
 # Wait for the database to be ready
 echo "Waiting for database..."
-until nc -z -v -w30 db 5432; do
-  echo "Waiting for database connection..."
+# Use wait-for-it instead of nc for more reliable connection checking
+wait-for-it -t 60 db:5432 -- echo "Database is up!"
+
+# As fallback, verify we can actually connect to PostgreSQL
+max_retries=10
+count=0
+until PGPASSWORD=$POSTGRES_PASSWORD psql -h db -U $POSTGRES_USER -d $POSTGRES_DB -c "SELECT 1" > /dev/null 2>&1; do
+  echo "Verifying PostgreSQL connection..."
+  count=$((count+1))
+  if [ $count -ge $max_retries ]; then
+    echo "Maximum retries reached, proceeding anyway but there might be issues"
+    break
+  fi
   sleep 5
 done
 

@@ -17,6 +17,16 @@ services:
       redis:
         condition: service_started
     restart: always
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:80/admin/login/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    logging:
+      options:
+        max-size: "10m"
+        max-file: "3"
 
   db:
     image: postgres:14
@@ -26,20 +36,30 @@ services:
       - postgres_data:/var/lib/postgresql/data/
     restart: always
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U myuser -d mydb"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
       interval: 5s
       timeout: 5s
       retries: 5
+      start_period: 10s
     logging:
       options:
         max-size: "10m"
         max-file: "3"
+    environment:
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_DB=${POSTGRES_DB}
 
   redis:
     image: redis:7-alpine
     restart: always
     volumes:
       - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
 
   celery-worker:
     build: .
@@ -52,9 +72,12 @@ services:
     env_file:
       - .env.prod
     depends_on:
-      - web
-      - db
-      - redis
+      web:
+        condition: service_started
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
 
   celery-beat:
     build: .
@@ -65,9 +88,12 @@ services:
     env_file:
       - .env.prod
     depends_on:
-      - web
-      - db
-      - redis
+      web:
+        condition: service_started
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
 
   nginx:
     image: nginx:1.21-alpine
@@ -79,7 +105,8 @@ services:
     ports:
       - "80:80"
     depends_on:
-      - web
+      web:
+        condition: service_started
 
 volumes:
   postgres_data:
