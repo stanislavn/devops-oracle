@@ -29,7 +29,7 @@ services:
         max-file: "3"
 
   db:
-    image: postgres:14
+    image: postgres:15
     env_file:
       - .env.prod
     volumes:
