@@ -15,7 +15,7 @@ from django_celery_beat.models import PeriodicTask, IntervalSchedule, CrontabSch
 from .tasks import run_management_command
 
 
-class DummyModelAdmin(admin.ModelAdmin):
+class DummyModelAdmin(TaskRunnerAdmin):
     actions = ["run_my_command"]
 
     def run_my_command(self, request, queryset):
@@ -121,6 +121,7 @@ class ManagementCommandAdmin(admin.ModelAdmin):
         return redirect("admin:app_managementcommand_changelist")
 
 
+# Register only once with the combined admin class
 admin.site.register(DummyModel, DummyModelAdmin)
 
 
@@ -217,7 +218,3 @@ class TaskRunnerAdmin(admin.ModelAdmin):
             "available_commands": available_commands,
         }
         return render(request, "admin/run_command.html", context)
-
-
-# Register with the custom view
-admin.site.register(DummyModel, TaskRunnerAdmin)

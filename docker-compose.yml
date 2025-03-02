@@ -12,8 +12,10 @@ services:
       - static_volume:/app/staticfiles
       - media_volume:/app/media
     depends_on:
-      - db
-      - redis
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_started
     restart: always
 
   db:
@@ -23,6 +25,11 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data/
     restart: always
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U myuser -d mydb"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
     logging:
       options:
         max-size: "10m"
