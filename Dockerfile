@@ -23,9 +23,11 @@ RUN apt-get update && apt-get install -y \
 COPY requirements.txt /app/
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy startup script
+# Copy startup script first and ensure it has correct permissions
 COPY start.sh /app/
-RUN chmod +x /app/start.sh
+# Make sure the script has unix line endings and is executable
+RUN sed -i 's/\r$//' /app/start.sh && \
+    chmod +x /app/start.sh
 
 # Copy entire repository into the container
 COPY . /app/
@@ -37,8 +39,12 @@ VOLUME /app/db_backups
 # Create a directory for database backups
 RUN mkdir -p /app/db_backups
 
+# Verify the script is executable (extra safety)
+RUN ls -la /app/start.sh && \
+    chmod 755 /app/start.sh
+
 # Expose port 80
 EXPOSE 80
 
 # Set the script as the command to run
-CMD ["/app/start.sh"]
+CMD ["/bin/bash", "/app/start.sh"]
