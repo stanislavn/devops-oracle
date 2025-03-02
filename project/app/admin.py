@@ -15,6 +15,47 @@ from django_celery_beat.models import PeriodicTask, IntervalSchedule, CrontabSch
 from .tasks import run_management_command
 
 
+class TaskRunnerAdmin(admin.ModelAdmin):
+    """Base admin class for models that need to run management commands."""
+
+    def get_urls(self):
+        urls = super().get_urls()
+        custom_urls = [
+            path(
+                "run-command/",
+                self.admin_site.admin_view(self.run_command_view),
+                name="run-command",
+            ),
+        ]
+        return custom_urls + urls
+
+    @method_decorator(csrf_protect)
+    def run_command_view(self, request):
+        """View for running management commands from the admin."""
+        if request.method == "POST":
+            command_name = request.POST.get("command_name")
+            if command_name:
+                try:
+                    output = StringIO()
+                    sys.stdout = output
+                    call_command(command_name)
+                    sys.stdout = sys.__stdout__
+                    self.message_user(
+                        request,
+                        f"Command {command_name} executed successfully!",
+                        level=messages.SUCCESS,
+                    )
+                    return HttpResponseRedirect("../")
+                except Exception as e:
+                    self.message_user(
+                        request,
+                        f"Error executing command: {str(e)}",
+                        level=messages.ERROR,
+                    )
+
+        return TemplateResponse(request, "admin/run_command.html", {})
+
+
 class DummyModelAdmin(TaskRunnerAdmin):
     actions = ["run_my_command"]
 
@@ -175,46 +216,3 @@ class TaskAdmin(admin.ModelAdmin):
             "available_commands": available_commands,
         }
         return render(request, "admin/run_task.html", context)
-
-
-# Create a dummy model admin to attach our custom view
-class TaskRunnerAdmin(admin.ModelAdmin):
-    model = DummyModel
-
-    def get_urls(self):
-        urls = super().get_urls()
-        custom_urls = [
-            path(
-                "run-command/",
-                self.admin_site.admin_view(self.run_command_view),
-                name="run_command",
-            ),
-        ]
-        return custom_urls + urls
-
-    def run_command_view(self, request):
-        available_commands = [
-            "clearsessions",
-            "cleanup_logs",
-            "collectstatic",
-            # Add more commands as needed
-        ]
-
-        if request.method == "POST":
-            command = request.POST.get("command")
-            if command in available_commands:
-                # Run the task asynchronously
-                task = run_management_command.delay(command)
-                messages.success(
-                    request, f"Task {command} started with task ID: {task.id}"
-                )
-            else:
-                messages.error(request, f"Invalid command: {command}")
-
-            return HttpResponseRedirect("../")
-
-        # GET request - show the form
-        context = {
-            "available_commands": available_commands,
-        }
-        return render(request, "admin/run_command.html", context)
