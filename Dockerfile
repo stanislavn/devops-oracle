@@ -8,12 +8,15 @@ ENV PYTHONUNBUFFERED 1
 # Set the working directory inside the container
 WORKDIR /app
 
-# Install system dependencies for Python
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    gcc \
-    libpq-dev \
+# Install system dependencies
+RUN apt-get update && apt-get install -y \
     postgresql-client \
+    gcc \
+    python3-dev \
+    musl-dev \
+    libpq-dev \
     netcat-traditional \
+    wait-for-it \
     && rm -rf /var/lib/apt/lists/*
 
 # Install Python dependencies
