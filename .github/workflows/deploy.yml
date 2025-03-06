@@ -19,84 +19,32 @@ jobs:
         echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
         chmod 600 ~/.ssh/id_rsa
 
-    - name: Deploy and fix issues on VPS
+    - name: Deploy to VPS
       run: |
         ssh -o StrictHostKeyChecking=no ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} << 'EOSSH'
+        # Navigate to your project directory
         cd /home/ubuntu/django-app/devops-oracle
         
-        echo "==== Creating PostgreSQL volume if it doesn't exist ===="
-        docker volume create postgres_data || echo "Volume already exists or creation failed"
-        docker volume inspect postgres_data || echo "Volume details not available"
-        
-        echo "==== Backup database before deployment ===="
-        DB_CONTAINER=$(docker ps --filter "name=devops-oracle_db" --format "{{.Names}}" | head -n 1)
-        if [ -n "$DB_CONTAINER" ]; then
-          echo "Found DB container: $DB_CONTAINER"
-          
-          # Create backup directory if it doesn't exist
-          mkdir -p ~/db_backups
-          
-          # Get database credentials from env file
-          if [ -f .env.prod ]; then
-            echo "Loading database credentials from .env.prod"
-            source <(grep -v '^#' .env.prod | sed -E 's/(.*)=(.*)/export \1="\2"/')
-            
-            # Backup current database using credentials from env file
-            BACKUP_FILE=~/db_backups/db_backup_before_deploy_$(date +%Y%m%d_%H%M%S).sql
-            echo "Creating database backup to $BACKUP_FILE"
-            docker exec $DB_CONTAINER bash -c "PGPASSWORD=\"$POSTGRES_PASSWORD\" pg_dump -U \"$POSTGRES_USER\" \"$POSTGRES_DB\"" > $BACKUP_FILE
-            
-            if [ -s "$BACKUP_FILE" ]; then
-              echo "Backup created successfully ($(wc -l < $BACKUP_FILE) lines)"
-            else
-              echo "WARNING: Backup file is empty or failed!"
-            fi
-          else
-            echo "WARNING: .env.prod file not found, skipping database backup"
-          fi
-        else
-          echo "No database container found to backup"
-        fi
-        
-        echo "==== Backing up current files ===="
-        cp docker-compose.yml docker-compose.yml.bak || echo "Backup failed but continuing"
-        cp Dockerfile Dockerfile.bak || echo "Backup failed but continuing"
-        
-        echo "==== Pulling latest code ===="
+        # Pull latest code
         git fetch origin main
         git reset --hard origin/main
         
-        echo "==== Stopping and rebuilding containers ===="
-        # Stop all containers gracefully to avoid data corruption
-        docker-compose down || echo "Error stopping containers, continuing anyway"
+        # Ensure environment files exist (first time only)
+        mkdir -p .envs/.production
         
-        # Ensure volume is properly configured
-        echo "==== Checking docker-compose.yml volume configuration ===="
-        if ! grep -q "name: postgres_data" docker-compose.yml; then
-          echo "WARNING: postgres_data volume name not explicitly set in docker-compose.yml"
+        # This would only run once to create initial env files if they don't exist
+        if [ ! -f ".envs/.production/.django" ]; then
+          echo "Creating Django environment file"
+          # Create your .django file with appropriate settings
         fi
         
-        if ! grep -q "external: true" docker-compose.yml; then
-          echo "WARNING: postgres_data volume not marked as external in docker-compose.yml"
+        if [ ! -f ".envs/.production/.postgres" ]; then
+          echo "Creating Postgres environment file"
+          # Create your .postgres file with appropriate settings
         fi
         
-        # Rebuild and restart all services
-        echo "==== Rebuilding and restarting all containers ===="
-        docker-compose build --no-cache web
-        docker-compose up -d
+        # Start the services using production configuration
+        docker-compose -f docker-compose.production.yml up -d --build
         
-        echo "==== Checking logs (will wait 60 seconds for startup) ===="
-        sleep 60
-        docker-compose logs --tail=100 web
-        
-        echo "==== Testing database connection and migrations status ===="
-        docker-compose exec -T web bash -c "cd /app/project && python manage.py showmigrations"
-        
-        echo "==== Deployment complete ===="
-        echo "Admin user: admin"
-        echo "Password: adminpassword"
-        echo "Please change this password immediately after logging in!"
-        
-        # Display all running containers
-        docker-compose ps
+        echo "Deployment complete!"
         EOSSH
