@@ -8,43 +8,55 @@ on:
 jobs:
   deploy:
     runs-on: ubuntu-latest
-
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v3
+      # 1) Check out the repository so we have access to the code in workflows
+      - name: Check out code
+        uses: actions/checkout@v3
 
-    - name: Setup SSH
-      run: |
-        mkdir -p ~/.ssh
-        echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
-        chmod 600 ~/.ssh/id_rsa
+      # 2) Configure SSH for use within GitHub Actions
+      - name: Configure SSH
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          # Optionally add the host to known_hosts (if you know the fingerprint)
+          # ssh-keyscan -H "${{ secrets.VPS_HOST }}" >> ~/.ssh/known_hosts
 
-    - name: Deploy to VPS
-      run: |
-        ssh -o StrictHostKeyChecking=no ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} << 'EOSSH'
-        # Navigate to your project directory
-        cd /home/ubuntu/django-app/devops-oracle
-        
-        # Pull latest code
-        git fetch origin main
-        git reset --hard origin/main
-        
-        # Ensure environment files exist (first time only)
-        mkdir -p .envs/.production
-        
-        # This would only run once to create initial env files if they don't exist
-        if [ ! -f ".envs/.production/.django" ]; then
-          echo "Creating Django environment file"
-          # Create your .django file with appropriate settings
-        fi
-        
-        if [ ! -f ".envs/.production/.postgres" ]; then
-          echo "Creating Postgres environment file"
-          # Create your .postgres file with appropriate settings
-        fi
-        
-        # Start the services using production configuration
-        docker-compose -f docker-compose.production.yml up -d --build
-        
-        echo "Deployment complete!"
-        EOSSH
+      # 3) Use SSH to deploy to your VPS
+      - name: Deploy to VPS
+        run: |
+          ssh -o StrictHostKeyChecking=no ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} << 'EOSSH'
+          set -eu
+
+          # 3.1) Navigate to the project directory on the VPS
+          cd /home/ubuntu/django-app/devops-oracle
+
+          # 3.2) Pull the latest code
+          git fetch origin main
+          git reset --hard origin/main
+
+          # 3.3) Ensure the production environment folders/files exist
+          mkdir -p .envs/.production
+
+          # Create the .django and .postgres env files only if they do not exist.
+          # You may need to populate them with appropriate secrets:
+          if [ ! -f ".envs/.production/.django" ]; then
+            echo "Creating Django environment file"
+            # Populate with actual secrets or placeholders
+            echo "DJANGO_SECRET_KEY=YourDjangoSecretKey" >> .envs/.production/.django
+            echo "DJANGO_ALLOWED_HOSTS=yourdomain.com" >> .envs/.production/.django
+            # Add more variables as needed
+          fi
+
+          if [ ! -f ".envs/.production/.postgres" ]; then
+            echo "Creating Postgres environment file"
+            echo "POSTGRES_USER=postgres" >> .envs/.production/.postgres
+            echo "POSTGRES_PASSWORD=YourPostgresPassword" >> .envs/.production/.postgres
+            # Add more variables as needed
+          fi
+
+          # 3.4) Build and run the containers in detached mode with production config
+          docker-compose -f docker-compose.production.yml up -d --build
+
+          echo "Deployment complete!"
+          EOSSH
