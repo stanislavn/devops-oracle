@@ -9,53 +9,61 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     steps:
-      # 1) Check out the repository so we have access to the code in workflows
-      - name: Check out code
+      # 1) (Optional) Check out code in GitHub Actions (useful for artifact references).
+      - name: Checkout code
         uses: actions/checkout@v3
 
-      # 2) Configure SSH for use within GitHub Actions
-      - name: Configure SSH
+      # 2) Configure SSH on the Actions runner
+      - name: Setup SSH
         run: |
           mkdir -p ~/.ssh
           echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
           chmod 600 ~/.ssh/id_rsa
-          # Optionally add the host to known_hosts (if you know the fingerprint)
+          # Optional: Add VPS host to known_hosts
           # ssh-keyscan -H "${{ secrets.VPS_HOST }}" >> ~/.ssh/known_hosts
 
-      # 3) Use SSH to deploy to your VPS
+      # 3) Deploy to VPS
       - name: Deploy to VPS
         run: |
           ssh -o StrictHostKeyChecking=no ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} << 'EOSSH'
           set -eu
 
-          # 3.1) Navigate to the project directory on the VPS
+          # Navigate to the deploy folder
           cd /home/ubuntu/django-app/devops-oracle
 
-          # 3.2) Pull the latest code
+          # If you haven't cloned the git repo yet, clone it. If you have, just pull updates.
+          if [ ! -d ".git" ]; then
+            echo "Cloning repository for the first time..."
+            git clone git@github.com:YOUR_GITHUB_USER/REPO_NAME.git .
+          fi
+
+          # Pull latest changes from main
           git fetch origin main
           git reset --hard origin/main
 
-          # 3.3) Ensure the production environment folders/files exist
+          # Ensure production env folder exists
           mkdir -p .envs/.production
 
-          # Create the .django and .postgres env files only if they do not exist.
-          # You may need to populate them with appropriate secrets:
+          # Create .django if it doesn't exist
           if [ ! -f ".envs/.production/.django" ]; then
-            echo "Creating Django environment file"
-            # Populate with actual secrets or placeholders
+            echo "Creating Django environment file..."
             echo "DJANGO_SECRET_KEY=YourDjangoSecretKey" >> .envs/.production/.django
             echo "DJANGO_ALLOWED_HOSTS=yourdomain.com" >> .envs/.production/.django
-            # Add more variables as needed
+            # Add more if needed
           fi
 
+          # Create .postgres if it doesn't exist
           if [ ! -f ".envs/.production/.postgres" ]; then
-            echo "Creating Postgres environment file"
+            echo "Creating Postgres environment file..."
             echo "POSTGRES_USER=postgres" >> .envs/.production/.postgres
             echo "POSTGRES_PASSWORD=YourPostgresPassword" >> .envs/.production/.postgres
-            # Add more variables as needed
+            # Add more if needed
           fi
 
-          # 3.4) Build and run the containers in detached mode with production config
+          # Move into the folder that holds docker-compose.production.yml
+          cd my_project
+
+          # Build and start containers in detached mode
           docker-compose -f docker-compose.production.yml up -d --build
 
           echo "Deployment complete!"
